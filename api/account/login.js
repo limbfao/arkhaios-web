@@ -7,93 +7,80 @@ const { hash } = require('../hashAlgo');
 const { logger } = require('../../util/logger')
 const { sessionCookieOptions } = require('../../util/cookies')
 
+const DEFAULT_SESSION = 1000 * 3600 * 5;       // 5 hours
+const REMEMBERED_SESSION = 1000 * 3600 * 24 * 30; // 30 days with "Keep me signed in"
+
 module.exports = {
     route: "/api/account/login",
     authenticate: false,
     post: async function (req, res) {
         try {
-            var error = '';
+            let error = '';
             let data = {};
-
             let response = RESPONSE_TYPE.FAILED;
 
-            const { email, password } = req.body;
+            const email = String(req.body.email || '').trim().toLowerCase();
+            const password = String(req.body.password || '');
+            const sessionExpiry = req.body.remember ? REMEMBERED_SESSION : DEFAULT_SESSION;
 
-            const sessionExpiry = 1000 * 3600 * 5; // By default, sessions expire in 5 hours
+            if(!email || !password) {
+                return res.status(400).json({ status: RESPONSE_TYPE.FAILED, message: 'email and password are required' });
+            }
 
             let authenticate = false;
             let user = null;
 
             await db.connect(async (db) => {
                 try {
-                    user = await db.collection('Users').
-                    findOne({ email: email });
+                    user = await db.collection('Users').findOne({ email: email });
 
                     if (user) {
-                        let { hashed, salt, iter } = hash(password, user.salt, user.iter);
-                    
+                        let { hashed } = hash(password, user.salt, user.iter);
+
                         if (user.password == hashed) {
                             if(user.mfaVerified) {
                                 if(!req.body.mfa) data["mfa"] = true;
                                 else {
-                                    var base32Encrypted = user.base32Secret;
-    
-                                    var base32 = await aes.backward(base32Encrypted);
-                            
+                                    var base32 = await aes.backward(user.base32Secret);
                                     var verified = speakeasy.totp.verify({secret: base32,
                                                                         encoding: 'base32',
                                                                         token: req.body.mfa});
-                            
-                                    if(verified) {
-                                        authenticate = true;
-                                    } else error = 'invalid mfa code';
+                                    if(verified) authenticate = true;
+                                    else error = 'invalid mfa code';
                                 }
                             } else authenticate = true;
-                        }
+                        } else error = 'invalid credentials';
                     } else error = 'invalid credentials';
                 } catch(e) {
-                    logger.log({
-                        level: 'error',
-                        message: e
-                    })
-
+                    logger.log({ level: 'error', message: e })
                     error = 'server error';
                     response = RESPONSE_TYPE.ERROR;
                 }
             });
-            
-            if(authenticate) {
-                response = RESPONSE_TYPE.SUCCESS;
-
-                const session = uuidv4();
-
-                data["session"] = session;
-
-                const result = await db.updateUser(user, {
-                    sessionToken: session,
-                    sessionExpiry: Date.now() + sessionExpiry
-                });
-                
-                if(!result) {
-                    // Failed to write to db
-                    response = RESPONSE_TYPE.ERROR;
-                }
-            }
 
             if(error != '') {
-                res.status(401).json({status: response, message: error});
-            } else {
-                res.cookie('email', email, sessionCookieOptions(req, sessionExpiry));
-                res.cookie('session', data.session, sessionCookieOptions(req, sessionExpiry));
-
-                res.status(200).json({ status: response, message: error, data: data });
+                return res.status(response === RESPONSE_TYPE.ERROR ? 500 : 401).json({status: response, message: error});
             }
-        } catch (e) {
-            logger.log({
-                level: 'error',
-                message: e
-            })
 
+            if(!authenticate) {
+                // Password was correct but an authenticator code is still needed
+                return res.status(200).json({ status: RESPONSE_TYPE.FAILED, message: 'mfa required', data: data });
+            }
+
+            const session = uuidv4();
+            const result = await db.updateUser(user, {
+                sessionToken: session,
+                sessionExpiry: Date.now() + sessionExpiry
+            });
+
+            if(!result) return SERVER_ERROR(res);
+
+            res.cookie('email', email, sessionCookieOptions(req, sessionExpiry));
+            res.cookie('session', session, sessionCookieOptions(req, sessionExpiry));
+
+            res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: '', data: { session } });
+        } catch (e) {
+            logger.log({ level: 'error', message: e })
             SERVER_ERROR(res)
         }
     }

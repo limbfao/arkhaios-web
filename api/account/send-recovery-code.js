@@ -1,5 +1,6 @@
 const db = require('../../util/db');
 const sendgrid = require('../external/sendgrid/api');
+const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
 const { logger } = require('../../util/logger')
 
 module.exports = {
@@ -7,39 +8,26 @@ module.exports = {
     authenticate: false,
     post: async function (req, res) {
         try {
-            var error = "";
-            const { email } = req.body;
-
-            try {
-                await db.connect(async (db) => {
-                    // Find if the email even exists in our database.
-                    const result = await db.collection('Users').findOne( {"email":email} );
-                    
-                    if (result != null) {
-                        sendgrid.sendCode(email,
-                            "Account Recovery", "We see you requested a password reset!");
-
-                        res.status(200);
-                        
-                    } else {
-                        res.status(503);
-                        error = "Account does not exist."
-                    }
-                    res.json( {error: error} )
-
-                })
-            } catch (e) { 
-                logger.log({
-                    level: 'error',
-                    message: e
-                })
+            const email = String(req.body.email || '').trim().toLowerCase();
+            if(!email) {
+                return res.status(400).json({ status: RESPONSE_TYPE.FAILED, error: "Email is required.", message: "email is required" });
             }
+
+            let exists = false;
+            await db.connect(async (db) => {
+                exists = (await db.collection('Users').findOne({ "email": email })) != null;
+            });
+
+            if(exists) {
+                await sendgrid.sendCode(email,
+                    "Account Recovery", "We see you requested a password reset!");
+            }
+
+            // Same response whether or not the account exists, so this can't be used to probe for emails
+            res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, error: "", message: "if the account exists, a code was sent" });
         } catch (e) {
-            logger.log({
-                level: 'error',
-                message: e
-            })
+            logger.log({ level: 'error', message: e })
+            SERVER_ERROR(res)
         }
     }
-
 }

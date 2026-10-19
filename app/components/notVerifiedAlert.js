@@ -1,41 +1,30 @@
 import Link from "next/link";
 
+// Shown to accounts that haven't completed identity (KYC) verification yet
 export default function NotVerifiedAlert() {
   return (
-    <div className="grid ">
-      <div className="justify-self-center max-w-screen-md ">
-        <div role="alert" className="alert max-w-80 border border-rose-500">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="stroke-current shrink-0 h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke="#f43f5e"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          <div>
-            <h3 className="font-bold text-lg text-white">Unverified Account!</h3>
-            <div className="text-sm font-thin">
-              You must legally verify your account in the settings to use all
-              features.
-            </div>
-          </div>
-          <div>
-            <Link
-              href="/account/settings/personal-information"
-              className="btn btn-sm bg-white hover:bg-slate-200 text-black hover:drop-shadow-md"
-            >
-              Verify
-            </Link>
-          </div>
-        </div>
+    <div
+      role="status"
+      className="flex w-full flex-wrap items-center gap-x-4 gap-y-3 rounded-box border border-bronze/30 bg-bronze/10 px-5 py-4"
+    >
+      <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-bronze" fill="none" aria-hidden="true">
+        <path
+          d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        />
+        <path d="M12 8v4.5M12 15.5h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-marble">Verify your identity to start investing</p>
+        <p className="mt-0.5 text-sm text-muted">
+          Brokerage rules require us to confirm who you are before you can deposit money, trade or join a fund.
+        </p>
       </div>
+      <Link href="/account/settings/personal-information" className="btn btn-primary btn-sm">
+        Verify identity
+      </Link>
     </div>
   );
 }

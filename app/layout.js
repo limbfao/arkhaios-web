@@ -19,7 +19,10 @@ export const metadata = {
 
 export default async function RootLayout({ children }) {
 
+  // Signed-out only pages (signed-in users are sent home)
   const loginPaths = ["/", "/login", "/signup", "/recovery", "/root-home"];
+  // Pages anyone can see
+  const isPublicPath = (path) => path?.startsWith("/legal/");
 
   const path = headers().get("x-url");
   const cookieStore = cookies();
@@ -43,28 +46,21 @@ export default async function RootLayout({ children }) {
     // console.log("After Filter User: " + JSON.stringify(user))
   }
   
-  console.log("Path: " + path);
   
   var allowAuthenticated = false;
-  if (!user && !loginPaths.includes(path)) {
+  if (!user && !loginPaths.includes(path) && !isPublicPath(path)) {
     redirect("/login");
-  } else if (!user && (path == '/root-home' || path == '/funds-home')) {
-    
-    // Do nothing.
   } else if (user) {
     allowAuthenticated = true;
     if (loginPaths.includes(path)) {
       redirect("/home");
     } else if (!user.emailVerified) {
       allowAuthenticated = false;
-      if (path != "/verify") {
+      if (path != "/signup/verify" && !isPublicPath(path)) {
         redirect("/signup/verify");
       }
-      console.log("False Authenticated");
     }
   }
-
-  console.log("Authenticated?" + allowAuthenticated);
 
 
 

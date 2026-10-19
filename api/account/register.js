@@ -10,7 +10,7 @@ const { sessionCookieOptions } = require('../../util/cookies')
 
 function generateUsername() {
     const numberDictionary = NumberDictionary.generate({ min: 100, max: 999 });
-    username = uniqueNamesGenerator({
+    const username = uniqueNamesGenerator({
     dictionaries: [adjectives, colors, animals, numberDictionary],
         length: 4,
         separator: '-',
@@ -33,8 +33,23 @@ module.exports = {
         try {
             let error = '';
             
-            const { firstName, lastName, email, password } = req.body;
-            
+            const firstName = String(req.body.firstName || '').trim();
+            const lastName = String(req.body.lastName || '').trim();
+            const email = String(req.body.email || '').trim().toLowerCase();
+            const password = String(req.body.password || '');
+
+            // Mirror the client-side rules so the API can't be used to bypass them
+            let invalid = '';
+            if(!firstName || !lastName) invalid = 'first and last name are required';
+            else if(firstName.length > 50 || lastName.length > 50) invalid = 'names must be 50 characters or fewer';
+            else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) invalid = 'enter a valid email address';
+            else if(password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password))
+                invalid = 'password must be at least 8 characters and include a letter and a number';
+
+            if(invalid) {
+                res.status(400).json({ status: RESPONSE_TYPE.FAILED, message: invalid, data: {} });
+                return;
+            }
 
             let { hashed, salt, iter } = hash(password, '', 0); // Hash password with SHA256
             let username = generateUsername(); // Generate username Ex: Fast-Red-Elephant-281
@@ -111,7 +126,7 @@ module.exports = {
             }
 
             if(response === RESPONSE_TYPE.SUCCESS) {
-                sendgrid.sendCode(email,
+                await sendgrid.sendCode(email,
                     "Your Verification Code", "Thank you for joining Arkhaios!");
 
                 res.cookie('email', email, sessionCookieOptions(req, sessionExpiry));
@@ -122,7 +137,7 @@ module.exports = {
                 }});
                 return
             } else if(error) {
-                res.status(401).json({ status: response, message: error, data: {} });
+                res.status(409).json({ status: RESPONSE_TYPE.FAILED, message: error, data: {} });
             } else {
                 SERVER_ERROR(res)
                 return

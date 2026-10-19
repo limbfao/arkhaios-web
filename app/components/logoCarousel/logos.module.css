@@ -1,58 +1,42 @@
-/* Logos.module.css */
+/* Slow, monochrome ticker of company logos on the landing page */
 @keyframes slide {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-100%);
-  }
-}
-.custom {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
-.custom div, .custom img {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
 .logos {
-  overflow: hidden;
-  padding: 10px 0;
-  background: #F4F0ED;
-  white-space: nowrap;
   position: relative;
+  overflow: hidden;
+  padding: 28px 0;
+  white-space: nowrap;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
 }
 
-.logos:before,
-.logos:after {
-  position: absolute;
-  top: 0;
-  width: 250px;
-  height: 100%;
-  content: "";
-  z-index: 2;
+.logosTrack {
+  display: flex;
+  width: max-content;
+  animation: slide 80s linear infinite;
 }
 
-.logos:before {
-  left: 0;
-  background: linear-gradient(to left, rgba(255, 255, 255, 0), #F4F0ED);
-}
-
-.logos:after {
-  right: 0;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0), #F4F0ED);
+.logos:hover .logosTrack {
+  animation-play-state: paused;
 }
 
 .logosSlide {
   display: flex;
-  animation: 40s slide infinite linear;
+  align-items: center;
 }
 
 .logosSlide img {
-  height: 50px;
-  margin: 0 40px;
+  height: 30px;
+  width: auto;
+  margin: 0 36px;
+  /* Render every logo as a marble-colored silhouette */
+  filter: brightness(0) invert(0.9);
+  opacity: 0.55;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .logosTrack { animation: none; }
+}

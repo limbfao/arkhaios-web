@@ -82,7 +82,7 @@ export default function Header({ user }) {
   return (
     <div className="flex h-16 items-center gap-6 px-4">
       <Link href="/home" className="flex shrink-0 items-center gap-2.5" aria-label="Arkhaios home">
-        <img src="/noBackgroundArkhaiosLogo.png" alt="" width={34} height={34} />
+        <img src="/logo-mark.png" alt="" width={34} height={34} />
         <span className="font-display text-xl tracking-wide text-marble">Arkhaios</span>
       </Link>
 
