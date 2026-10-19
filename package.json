@@ -8,7 +8,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tailwindcss -o output.css --minify && next build",
     "deploy": "NODE_ENV=production node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "demo": "./demo/start.sh",
+    "demo:reset": "./demo/start.sh --reseed"
   },
   "author": "Arkhaios LLC",
   "license": "UNLICENSED",

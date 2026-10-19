@@ -189,33 +189,6 @@ body {
   min-height: 90vh;
 }
 
-section {
-  box-sizing: border-box;
-  width: 100%;
-  height: 90vh;
-  display: flex;
-  justify-content: flex-start;
-  overflow: hidden;
-  padding-right: 30px;
-  padding-left: 30px;
-}
-
-section:nth-child(2) {
-	background-image: url('/moneygoingtobullfrombear.png');
-	background-size: contain;
-	/* background: #48a5be; */
-  }
-  
-  
-  section:nth-child(3) {
-	background: #bd19c8;
-  }
-
-section span {
-  display: block;
-  transform: translateX(-100px);
-  opacity: 0;
-}
 
 .secondPage {
 	font-weight: 700;

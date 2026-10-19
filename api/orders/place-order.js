@@ -12,50 +12,52 @@ module.exports = {
         let fundAuthorized = false;
         let fund = null;
 
+        // Fund orders: portfolio managers only, limit orders in shares, buys paid from the fund's cash
         if(fundID) {
             try {
                 await db.connect(async (db) => {
                     fund = await db.collection('FundPortfolios').findOne({"fundID": fundID});
-                    if(fund) {
-                        if(fund.portfolioManagers.includes(user.accountID)) {
-                            fundAuthorized = true;
-                        } else {
-                            res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: response});
-                        }
-                    } else {
-                        res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: response});
-                    }
                 });
             } catch(e) {
-                logger.log({
-                    level: 'error',
-                    message: e
-                })
-
+                logger.log({ level: 'error', message: e });
                 return SERVER_ERROR(res);
             }
-            
-            if(req.body.type != "limit") {
-                return res.status(401).json({ status: RESPONSE_TYPE.FAILED,
-                    message: "funds may only place limit orders", data: {}});
+
+            if(!fund || !fund.portfolioManagers?.includes(user.accountID)) {
+                return res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: {}});
             }
 
-            if(fund && fundAuthorized) {
-                const availableBalance = new BigNumber(fund.availableBalance);
-                const qty = new BigNumber(req.body.qty);
-                const price = new BigNumber(req.body.price); 
-            
+            if(req.body.type != "limit") {
+                return res.status(400).json({ status: RESPONSE_TYPE.FAILED,
+                    message: "Funds may only place limit orders", data: {}});
+            }
+
+            const qty = new BigNumber(req.body.qty);
+            const price = new BigNumber(req.body.price);
+            if(req.body.transaction != "shares" || !qty.isFinite() || qty.lte(0)) {
+                return res.status(400).json({ status: RESPONSE_TYPE.FAILED,
+                    message: "Enter a number of shares greater than zero", data: {}});
+            }
+            if(!price.isFinite() || price.lte(0)) {
+                return res.status(400).json({ status: RESPONSE_TYPE.FAILED,
+                    message: "Enter a limit price greater than zero", data: {}});
+            }
+
+            if(req.body.side != "sell") {
+                const availableBalance = new BigNumber(fund.availableBalance || 0);
                 const difference = availableBalance.minus(price.times(qty));
 
-                if(difference.isLessThanOrEqualTo(new BigNumber("0"))) {
-                    return res.status(401).json({ status: RESPONSE_TYPE.FAILED,
-                        message: "insufficient funds", data: {}});
+                if(difference.isLessThan(0)) {
+                    return res.status(400).json({ status: RESPONSE_TYPE.FAILED,
+                        message: "This order costs more than the fund's available cash", data: {}});
                 }
-                
-                fund.availableBalance = difference.toString();
+
+                fund.availableBalance = difference.decimalPlaces(2).toFixed(2);
             }
+
+            fundAuthorized = true;
         }
-        
+
         if(!fundID || fundAuthorized) {
             const data = {
                 symbol: req.body.symbol,
@@ -110,8 +112,9 @@ module.exports = {
 
                 res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: "", data: response});
             } else {
-                if(response.message) {
-                    res.status(500).json({ status: RESPONSE_TYPE.ERROR, message: response.message, data: response});
+                if(response?.message) {
+                    // Brokerage rejections (e.g. insufficient buying power) are client errors
+                    res.status(status >= 400 && status < 500 ? status : 500).json({ status: RESPONSE_TYPE.ERROR, message: response.message, data: response});
                 } else {
                     SERVER_ERROR(res)
                 }

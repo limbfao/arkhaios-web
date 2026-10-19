@@ -1,5 +1,5 @@
 const db = require('../../util/db');
-const logger = require('../../util/logger');
+const { logger } = require('../../util/logger');
 const alpaca = require('../external/alpaca/api');
 const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
 
@@ -12,8 +12,9 @@ module.exports = {
         let lookup = user.brokerageID;
         if(req.query.fund) {
             lookup = process.env.FIRM_ACCOUNT;
-            if(!user.fundsManaging.includes(req.query.fund)) {
+            if(!user.fundsManaging?.includes(req.query.fund)) {
                 res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: []});
+                return;
             }
         }
 
@@ -23,14 +24,13 @@ module.exports = {
             if(req.query.fund) {
                 try {
                     await db.connect(async (db) => {
-                        fund = await db.collection('FundOrders').findOne({"fundID": req.query.fund});
-                        if(fund) {
-                            const list = response.filter((order) => fund.orders.includes(order.id));
-                            
-                            res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: "", data: list});
-                        } else {
-                            res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "server error", data: []});
-                        }
+                        const fund = await db.collection('FundOrders').findOne({"fundID": req.query.fund});
+                        // A fund that has not traded yet has no FundOrders document
+                        const ids = fund?.orders || [];
+                        const list = response
+                            .filter((order) => ids.includes(order.id))
+                            .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+                        res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: "", data: list});
                     });
                 } catch(e) {
                     logger.log({

@@ -4,24 +4,26 @@ import "./card.css";
 export default function Cards() {
   const cardRef = useRef(null); // This ref will point to the .card element
 
-  useEffect( () => {
-    console.clear();
+  // Spotlight effect: track the pointer position on each card
+  useEffect(() => {
     const featuresEl = document.querySelector(".features");
+    if (!featuresEl) return;
     const featureEls = document.querySelectorAll(".firstCard, .secondCard");
-  
-    featuresEl.addEventListener("pointermove", (ev) => {
+
+    function onMove(ev) {
       featureEls.forEach((featureEl) => {
-        // Not optimized yet, I know
         const rect = featureEl.getBoundingClientRect();
         featureEl.style.setProperty("--x", ev.clientX - rect.left);
         featureEl.style.setProperty("--y", ev.clientY - rect.top);
       });
-    });
-  }, []) 
+    }
+    featuresEl.addEventListener("pointermove", onMove);
+    return () => featuresEl.removeEventListener("pointermove", onMove);
+  }, []);
   
 
   return (
-    <div className="grid grid-cols 1">
+    <div className="grid grid-cols-1">
       
         <div className="grid grid-cols-2 place-self-center features text-black">
           <div className="firstCard"> 

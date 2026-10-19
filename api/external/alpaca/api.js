@@ -89,7 +89,7 @@ module.exports = {
 
 	// https://docs.alpaca.markets/reference/patchaccount-1
 	enable_crypto: async function(id, ip) {
-		data = {
+		const data = {
 			"agreements": [
 				{
 				"agreement": "crypto_agreement",
@@ -156,7 +156,7 @@ module.exports = {
 	
 	// https://docs.alpaca.markets/reference/deleteorderforaccount-1
 	cancel_order: async function(account, order) {
-		return get("/v1/trading/accounts/" + account + "/orders/" + order);
+		return http("/v1/trading/accounts/" + account + "/orders/" + order, "DELETE");
 	},
 
 	// https://docs.alpaca.markets/reference/getpositionsforaccount-1

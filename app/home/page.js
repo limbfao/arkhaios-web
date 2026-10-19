@@ -1,57 +1,80 @@
 "use client";
-// import UserChart from "./userChart";
-import Header from "../header.js";
-import "./userChart";
 
-import UserContext from "../UserContext.js";
 import { useContext } from "react";
-import NotVerifiedAlert from "../components/notVerifiedAlert.js";
-import UnverfiedHomeChart from "./unverifiedHomeChart.js";
-import AssetView from "./AssetView.js";
-import VerifiedHomeChart from "./verifiedHomeChart.js";
-import UnverifiedAssetView from "./unverifiedAssetView.js";
+import UserContext from "../UserContext.js";
+import useFetch from "../hooks/useFetch";
+import PortfolioHero from "./PortfolioHero.js";
+import Holdings from "./Holdings.js";
 import Watchlist from "./watchlist.js";
-import UnverifiedWatchlist from "./unverifiedWatchlist.js";
 import MarketNews from "./marketNews.js";
 import Orders from "./Orders.js";
+import VerifyPrompt from "./VerifyPrompt.js";
+
+function VerifiedHome() {
+  const trading = useFetch("/api/account/trading");
+  const positions = useFetch("/api/positions");
+  const orders = useFetch("/api/orders");
+
+  function refresh() {
+    trading.reload();
+    positions.reload();
+    orders.reload();
+  }
+
+  return (
+    <div className="space-y-6">
+      <PortfolioHero trading={trading.responseJSON?.data} tradingLoading={trading.isLoading} />
+
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-6">
+          <Holdings
+            positions={positions.responseJSON?.data}
+            isLoading={positions.isLoading}
+            error={positions.error}
+            onRetry={positions.reload}
+          />
+          <Orders
+            orders={orders.responseJSON?.data}
+            isLoading={orders.isLoading}
+            error={orders.error}
+            onRetry={orders.reload}
+            onChanged={refresh}
+          />
+        </div>
+        <div className="space-y-6">
+          <Watchlist />
+          <MarketNews compact initialCount={4} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Page() {
   const { user } = useContext(UserContext);
 
   return (
-    <>
-      <main className="flex flex-wrap justify-center p-5 border-b border-amber-100">
-        {!user.kycVerified ? (
-          <div className="flex justify-center px-64">
-            <NotVerifiedAlert />
-          </div>
-        ) : (
-          <></>
-        )}
+    <div className="page">
+      <div className="mb-8">
+        <h1 className="page-title">
+          {user?.kycVerified ? "Welcome back" : "Welcome"}{user?.firstName ? `, ${user.firstName}` : ""}
+        </h1>
+        <p className="mt-1.5 text-sm text-muted">
+          {user?.kycVerified ? "Here's how your portfolio is doing." : "Welcome to Arkhaios."}
+        </p>
+      </div>
 
-        <div className="shrink flex flex-wrap py-4 px-3 justify-items-center">
-          <div className="justify-self-start rounded-sm">
-            {!user.kycVerified ? <UnverifiedAssetView /> : <AssetView />}
-          </div>
-          <div className="shrink grid max-w-[3/4] px-5  justify-self-center">
-            {!user.kycVerified ? (
-              <UnverfiedHomeChart user={user} />
-            ) : (
-              <VerifiedHomeChart user={user} />
-            )}
-          </div>
-          <div className="justify-self-end pl-5 rounded-sm">
-            {user.kycVerified ? <Watchlist /> : <UnverifiedWatchlist />}
+      {user?.kycVerified ? (
+        <VerifiedHome />
+      ) : (
+        <div className="space-y-6">
+          <VerifyPrompt />
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <Watchlist />
+            <MarketNews />
           </div>
         </div>
-      </main>
-      <main>
-        <h1 className="pl-10 pt-10 interBold text-3xl text-white">NEWS</h1>
-        <div className="flex space-between">
-          <MarketNews />
-          <Orders />
-        </div>
-      </main>
-    </>
+      )}
+    </div>
   );
 }

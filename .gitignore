@@ -3,3 +3,4 @@ node_modules
 .next
 server.log
 certs/
+demo/.state.json

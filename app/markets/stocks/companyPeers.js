@@ -1,39 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from 'next/link'
 import useFetch from "../../hooks/useFetch";
+import { EmptyState, ErrorState, SkeletonRows, Panel } from "../../components/ui";
+import AssetRows from "../components/AssetRows";
+import { toChartSymbol } from "../components/symbols";
 
 export default function CompanyPeers({ symbol }) {
-  const { error, isLoading, responseJSON } = useFetch(
-    "/api/company-peers?symbol=" + symbol
-  );
+  const self = toChartSymbol(symbol);
+  const peers = useFetch("/api/company-peers?symbol=" + encodeURIComponent(self));
+  const list = (peers.responseJSON?.data || []).map(toChartSymbol).filter((s) => s && s !== self).slice(0, 6);
+  const snapshot = useFetch(list.length ? "/api/market/snapshot?symbols=" + list.join(",") : null);
 
-  const [companyPeers, setCompanyPeers] = useState([]);
-
-  useEffect(() => {
-    if (responseJSON) {
-      setCompanyPeers(responseJSON.data);
-    }
-  }, [isLoading, responseJSON]);
+  let body;
+  if (peers.isLoading || snapshot.isLoading) body = <div className="p-5"><SkeletonRows rows={4} /></div>;
+  else if (peers.error || snapshot.error) body = <ErrorState message="Similar companies couldn't be loaded." onRetry={() => { peers.reload(); snapshot.reload(); }} />;
+  else if (!snapshot.responseJSON?.data?.length) body = <EmptyState title="No similar companies found" />;
+  else body = <AssetRows items={snapshot.responseJSON.data} sparkline={false} />;
 
   return (
-    <div className="w-72 h-96">
-      <div>
-        <p className="text-center text-lg font-bold border-b border-yellow-100 ">
-          Similar Companies
-        </p>
-        {companyPeers.map(
-          (company, index) =>
-            index > 0 && ( // Skip the first item (index 0)
-              <div key={company} className="py-1 px-1 hover:underline">
-                <Link href={`/markets/stocks/` + company}>
-                  <p className="text-center font-light">{company}</p>
-                </Link>
-              </div>
-            )
-        )}
-      </div>
-    </div>
+    <Panel title="Similar companies" bodyClassName="">
+      {body}
+    </Panel>
   );
 }

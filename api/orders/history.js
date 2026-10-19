@@ -19,31 +19,32 @@ module.exports = {
         const expiration = ((period, timeframe) => {
             if(period == '1D' && timeframe == '1Min') return 60;
             else if(period == '1W' && timeframe == '5Min') return 150;
+            else if(period == '1W' && timeframe == '1H') return 600;
             else if(period == '1M' && timeframe == '1D') return 3600;
             else if(period == '6M' && timeframe == '1D') return 3600;
+            else if(period == '1A' && timeframe == '1D') return 3600;
+            else if(period == '5A' && timeframe == '1D') return 3600;
 
             return -1;
         })(period, timeframe);
 
-        console.log("loading...");
-
+        const cacheKey = `portfolio:${user.brokerageID}:${period}:${timeframe}`;
         let cached = null;
-        db.redis_get(`portfolio:${user.brokerageID}:${period}:${timeframe}`).then(async (data) => {
-            console.log("got here!");
-            if(data) {
-                cached = data;
-            }
-        });
+        try {
+            cached = await db.redis_get(cacheKey);
+        } catch(e) {
+            cached = null; // Redis unavailable or slow; fall through to the brokerage
+        }
 
         if(cached) {
-            return res.status(200).send({status: RESPONSE_TYPE.SUCCESS, data: {history: JSON.parse(data) }});
+            return res.status(200).send({status: RESPONSE_TYPE.SUCCESS, data: {history: JSON.parse(cached) }});
         } else {
             const { response, status } = await alpaca.get_portfolio(user.brokerageID, period, timeframe);
             
             if(status == 200) {
                 let equity = response["equity"]
 
-                data = {}
+                const data = {};
 
                 data["timestamp"] = response["timestamp"];
 
@@ -70,7 +71,7 @@ module.exports = {
 
                 if(expiration >= 0) {
                     // Only cache calls relevant for displaying charts
-                    db.redis_set(`portfolio:${user.brokerageID}:${period}:${timeframe}`, expiration, JSON.stringify(data));
+                    db.redis_set(cacheKey, expiration, JSON.stringify(data)).catch(() => {});
                 }
                 
                 res.status(200).send({status: RESPONSE_TYPE.SUCCESS, data: { history: data }});

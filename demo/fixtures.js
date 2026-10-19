@@ -32,6 +32,12 @@ module.exports = {
 
   CASH: 12480.55,
 
+  // Fund portfolios held in the firm account: symbol -> [shares, avg entry price]
+  FUNDS: {
+    ARKG: { cash: 18450.22, positions: { MSFT: [30, 405.0], GOOGL: [80, 158.0], JPM: [40, 205.0], NVDA: [120, 101.3] } },
+    BHV: { cash: 42000.0, positions: { KO: [150, 64.2], PEP: [60, 166.0], WMT: [120, 71.9] } },
+  },
+
   FUND_ORDER_IDS: ["ord-fund-0001", "ord-fund-0002", "ord-fund-0003", "ord-fund-0004"],
 
   // Orders shown in the order history (personal + fund)

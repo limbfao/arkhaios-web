@@ -28,7 +28,7 @@ module.exports = {
                 });
             } else {
                 // Response JSON is null or empty
-                res.status(204).send({
+                res.status(200).send({
                     status: RESPONSE_TYPE.FAILED,
                     message: 'No company peers available for the specified stock.',
                     data: []

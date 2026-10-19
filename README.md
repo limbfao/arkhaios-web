@@ -2,6 +2,7 @@
 
 ### Contents
 - [Getting started](#Getting-started)
+- [Local demo (no .env needed)](#Local-demo-no-env-needed)
 - [Dependencies](#Dependencies)
 - [Contributing](#Contributing)
 
@@ -11,6 +12,39 @@
 3. **Retrieve a copy of the `.env` file**: Obtain a copy of the `.env` file required for environment setup.
 4. **Install packages**: Run `yarn install` to install all required Node.js packages.
 5. **Run server** Run a local server with `yarn run start`.
+
+## Local demo (no .env needed)
+Run the whole app locally with fake data, without any production credentials:
+
+```bash
+yarn install
+yarn demo          # or ./demo/start.sh
+```
+
+Then open http://localhost:3000 and sign in with `demo@arkhaios.test` / `demo1234`.
+Requires Docker (for local MongoDB and Redis).
+
+What demo mode does:
+- Starts MongoDB (port 27018) and Redis (port 6380) in Docker containers and seeds them on first run
+  (`demo/seed.js`): five users, two funds, friends, chat history, notifications and a watchlist.
+- Replaces external services with local fakes (`demo/mock-apis.js`): Alpaca brokerage, Yahoo Finance
+  charts, Finnhub news, the fund history service and SendGrid. Verification codes are printed in the
+  server log instead of emailed. Plaid bank linking uses sample banks.
+- Prices follow one continuous path per symbol (`demo/market.js`), so quotes, charts, positions and
+  portfolio value always agree. Stocks trade during US market hours; crypto trades 24/7.
+- The fake brokerage is stateful: orders check buying power and holdings, fills move cash and
+  positions, limit orders fill when the price crosses, and deposits settle after about 20 seconds.
+  Its state lives in `demo/.state.json`.
+
+| Account | Password | Role |
+|---|---|---|
+| `demo@arkhaios.test` | `demo1234` | Manages the Arkhaios Growth fund (ARKG), investor in Blue Harbor Value |
+| `priya@arkhaios.test` | `demo1234` | Manages Blue Harbor Value (BHV) |
+| `marcus@arkhaios.test` | `demo1234` | Fund member without a fund of his own |
+| `sofia@arkhaios.test`, `jordan@arkhaios.test` | `demo1234` | Pending friend and fund requests |
+
+The app keeps one session per account, so signing in elsewhere signs out the previous session.
+Use `yarn demo:reset` to restore the original demo data.
 
 ## Dependencies
 * Install the following dependencies:

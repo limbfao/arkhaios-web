@@ -46,6 +46,9 @@ async function main() {
   const db = client.db("db");
   await db.dropDatabase();
 
+  // Reset the mocked brokerage (orders, cash, positions) along with the database
+  require("fs").rmSync(require("path").join(__dirname, ".state.json"), { force: true });
+
   // ----- Users -----
   const users = fx.USERS.map((u, i) => {
     const { hashed, salt, iter } = hash(fx.DEMO_PASSWORD, "", 0);
@@ -100,44 +103,61 @@ async function main() {
   ]);
 
   // ----- Funds -----
-  const growthValue = market.fundValue("ARKG");
-  const valueValue = market.fundValue("BHV");
+  const contribution = (member, amount, daysAgo, journalID) => ({
+    user: member.accountID, amount: amount.toFixed(2), time: now - daysAgo * DAY, journalID, status: "executed",
+  });
+  // Fund value = cash + holdings marked to market; startValue is the value one day ago
+  const fundValue = (symbol, t = Date.now() / 1000) => {
+    const fund = fx.FUNDS[symbol];
+    const holdings = Object.fromEntries(Object.entries(fund.positions).map(([s, [qty]]) => [s, qty]));
+    return market.portfolioValue(holdings, fund.cash, t);
+  };
+  const growthValue = fundValue("ARKG");
+  const valueValue = fundValue("BHV");
   await db.collection("FundPortfolios").insertMany([
     {
       fundName: "Arkhaios Growth", fundID: GROWTH_FUND, fundSymbol: "ARKG",
       fundDescription: "A concentrated portfolio of large-cap technology and quality compounders, " +
         "rebalanced quarterly.",
       portfolioManagers: [demo.accountID], fundFounder: demo.accountID, publiclyAvailable: true,
-      fundValue: growthValue, startValue: +(growthValue * 0.987).toFixed(2), accessCode: "481516",
+      fundValue: growthValue, startValue: fundValue("ARKG", Date.now() / 1000 - 86400), accessCode: "481516",
       memberRequests: [{ user: sofia.accountID, inquiry: "I'd love to join, I follow your picks closely." },
         { user: jordan.accountID, inquiry: "Interested in long-term growth exposure." }],
       members: [demo.accountID, priya.accountID, marcus.accountID],
       fundDisbursementPeriod: "quarterly", disbursementType: "2/20",
       dateCreated: now - 75 * DAY, fundRecruiting: false, recruitEnd: Math.floor((now - 40 * DAY) / 1000),
-      availableBalance: "18450.22", withdrawableFunds: "0",
-      inJournals: ["jnl-demo-1", "jnl-demo-2"], outJournals: [], completedJournals: ["jnl-demo-1", "jnl-demo-2"],
+      availableBalance: fx.FUNDS.ARKG.cash.toFixed(2), withdrawableFunds: "0",
+      inJournals: ["jnl-demo-1", "jnl-demo-2", "jnl-demo-3"], outJournals: [],
+      completedJournals: ["jnl-demo-1", "jnl-demo-2", "jnl-demo-3"],
+      // Capital each member deposited during recruiting (read by api/fund/members.js)
+      contributions: [
+        contribution(demo, 25000, 70, "jnl-demo-1"), contribution(priya, 22000, 62, "jnl-demo-2"),
+        contribution(marcus, 15000, 48, "jnl-demo-3"),
+      ],
     },
     {
       fundName: "Blue Harbor Value", fundID: VALUE_FUND, fundSymbol: "BHV",
       fundDescription: "Dividend-paying value stocks with a margin of safety. Currently recruiting members.",
       portfolioManagers: [priya.accountID], fundFounder: priya.accountID, publiclyAvailable: true,
-      fundValue: valueValue, startValue: +(valueValue * 0.995).toFixed(2), accessCode: "271828",
+      fundValue: valueValue, startValue: fundValue("BHV", Date.now() / 1000 - 86400), accessCode: "271828",
       memberRequests: [], members: [priya.accountID, demo.accountID, marcus.accountID],
       fundDisbursementPeriod: "monthly", disbursementType: "1/10",
       dateCreated: now - 20 * DAY, fundRecruiting: true, recruitEnd: Math.floor((now + 10 * DAY) / 1000),
-      availableBalance: "42000.00", withdrawableFunds: "0",
-      inJournals: [], outJournals: [], completedJournals: [],
+      availableBalance: fx.FUNDS.BHV.cash.toFixed(2), withdrawableFunds: "0",
+      inJournals: ["jnl-demo-4", "jnl-demo-5", "jnl-demo-6"], outJournals: [],
+      completedJournals: ["jnl-demo-4", "jnl-demo-5", "jnl-demo-6"],
+      contributions: [
+        contribution(priya, 40000, 19, "jnl-demo-4"), contribution(demo, 18000, 12, "jnl-demo-5"),
+        contribution(marcus, 12000, 6, "jnl-demo-6"),
+      ],
     },
   ]);
 
+  const fundPositions = (symbol) => Object.fromEntries(
+    Object.entries(fx.FUNDS[symbol].positions).map(([s, [shares, avg]]) => [s, fundPosition(s, shares, avg)]));
   await db.collection("FundPositions").insertMany([
-    { fundID: GROWTH_FUND, positions: {
-      MSFT: fundPosition("MSFT", 30, 405.0), GOOGL: fundPosition("GOOGL", 80, 158.0),
-      JPM: fundPosition("JPM", 40, 205.0), NVDA: fundPosition("NVDA", 120, 101.3),
-    } },
-    { fundID: VALUE_FUND, positions: {
-      KO: fundPosition("KO", 150, 64.2), PEP: fundPosition("PEP", 60, 166.0), WMT: fundPosition("WMT", 120, 71.9),
-    } },
+    { fundID: GROWTH_FUND, positions: fundPositions("ARKG") },
+    { fundID: VALUE_FUND, positions: fundPositions("BHV") },
   ]);
 
   await db.collection("FundOrders").insertOne({ fundID: GROWTH_FUND, orders: fx.FUND_ORDER_IDS });

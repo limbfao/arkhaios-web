@@ -27,7 +27,8 @@ export function formatSignedCurrency(value, options) {
 export function formatPercent(value, { isPercent = false, signed = true, digits = 2 } = {}) {
   const n = toNumber(value);
   if (n === null) return "—";
-  const pct = isPercent ? n : n * 100;
+  let pct = isPercent ? n : n * 100;
+  if (Math.abs(pct) < 0.5 * 10 ** -digits) pct = 0; // no "−0.00%"
   const sign = signed ? (pct > 0 ? "+" : pct < 0 ? "−" : "") : pct < 0 ? "−" : "";
   return `${sign}${Math.abs(pct).toFixed(digits)}%`;
 }

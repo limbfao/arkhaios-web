@@ -7,6 +7,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 export NODE_ENV=development
+export DEMO_MODE=1
 export PORT="${PORT:-3000}"
 export MONGO_URL="mongodb://127.0.0.1:27018"
 export REDIS_SERVER=127.0.0.1 REDIS_PORT=6380 REDIS_PASSWORD=demo
@@ -14,7 +15,9 @@ export AES_KEY="1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16"
 export PEPPER=demo-pepper SECRET=demo KEY_ID=demo
 export SENDGRID_API_KEY=SG.demo SENDGRID_FROM=demo@arkhaios.test SENDGRID_TEMPLATE=demo
 export FINNHUB_API_KEY=demo PLAID_CLIENTID=demo PLAID_SANDBOX=demo
+export DEMO_MODE=1 # simulated bank linking instead of Plaid
 export FIRM_ACCOUNT=firm-0000-demo-account
+export KAFKAJS_NO_PARTITIONER_WARNING=1
 
 start_container() { # name, image, port, extra args...
   local name=$1 image=$2 port=$3; shift 3

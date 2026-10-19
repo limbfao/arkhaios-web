@@ -86,10 +86,13 @@ export function ErrorState({ message = "This couldn't be loaded.", onRetry }) {
 }
 
 // Small logo for a stock or crypto symbol, falling back to its initials
+// Funds and ETFs have no company logo on the logo service
+const NO_LOGO = new Set(["SPY", "QQQ", "DIA", "IWM", "VOO", "VTI"]);
+
 export function AssetLogo({ symbol = "", size = 32 }) {
   const clean = symbol.replace(/[-/]?USD$/i, "").toUpperCase();
   const isCrypto = /USD$/i.test(symbol) && clean !== symbol.toUpperCase();
-  const src = isCrypto
+  const src = NO_LOGO.has(clean) ? null : isCrypto
     ? `https://assets.coincap.io/assets/icons/${clean.toLowerCase()}@2x.png`
     : `https://logos.stockanalysis.com/${clean.toLowerCase()}.svg`;
 
@@ -99,12 +102,12 @@ export function AssetLogo({ symbol = "", size = 32 }) {
       style={{ width: size, height: size }}
     >
       {clean.slice(0, 2)}
-      <img
+      {src ? <img
         src={src}
         alt=""
         className="absolute inset-0 h-full w-full bg-marble object-contain p-1"
         onError={(e) => { e.currentTarget.style.display = "none"; }}
-      />
+      /> : null}
     </span>
   );
 }
