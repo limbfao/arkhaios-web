@@ -153,7 +153,7 @@ function settle(acct) {
     } else if (order.type === "limit") {
       const limit = parseFloat(order.limit_price);
       if ((order.side === "buy" && price <= limit) || (order.side === "sell" && price >= limit)) {
-        fill(acct, order, Math.min(price, limit) === price && order.side === "buy" ? price : limit);
+        fill(acct, order, price); // marketable limit orders fill at the market price (never worse than the limit)
         changed = true;
       }
     }
@@ -580,16 +580,33 @@ function finnhub(url) {
 
 // ---------- Fund portfolio history service ----------
 
-// A fund's value over time: its current holdings marked to the shared price path
-function fundHistory(url) {
+// A fund's value over time: its current holdings and cash (from the database)
+// marked to the shared price path
+async function fundHolding(symbol) {
+  const { MongoClient } = require("mongodb");
+  const client = new MongoClient(process.env.MONGO_URL);
+  try {
+    await client.connect();
+    const db = client.db("db");
+    const fund = await db.collection("FundPortfolios").findOne({ fundSymbol: String(symbol).toUpperCase() });
+    if (!fund) return null;
+    const doc = await db.collection("FundPositions").findOne({ fundID: fund.fundID });
+    const holdings = Object.fromEntries(Object.entries(doc?.positions || {})
+      .map(([s, p]) => [s, parseFloat(p.shares) || 0]));
+    return { holdings, cash: parseFloat(fund.availableBalance) || 0 };
+  } finally {
+    await client.close();
+  }
+}
+
+async function fundHistory(url) {
   const [, , , symbol, period] = url.pathname.split("/"); // /api/portfolio/:symbol/:period
-  const fund = fx.FUNDS[String(symbol).toUpperCase()];
+  const fund = await fundHolding(symbol).catch(() => null);
   if (!fund) return json({ timestamps: [], value: [] });
-  const holdings = Object.fromEntries(Object.entries(fund.positions).map(([s, [qty]]) => [s, qty]));
   const [step, span, sessionOnly] = { "1d": [300, 86400, true], "1w": [3600, 7 * 86400], "1m": [86400, 30 * 86400] }[period]
     || [86400, 30 * 86400];
   const timestamps = market.timeGrid("SPY", step, span, { sessionOnly });
-  return json({ timestamps, value: timestamps.map((t) => market.portfolioValue(holdings, fund.cash, t)) });
+  return json({ timestamps, value: timestamps.map((t) => market.portfolioValue(fund.holdings, fund.cash, t)) });
 }
 
 // ---------- fetch interception ----------
@@ -620,5 +637,8 @@ sendgrid.send = async function (msg) {
     `code = ${p?.dynamicTemplateData?.Code}\n`);
   return [{ statusCode: 202 }];
 };
+
+// Settle fund deposits and fund order fills the way the production backend would
+require("./fund-processor").start({ account, settle });
 
 console.log("[demo] Mock APIs enabled (Alpaca, Yahoo, Finnhub, fund history, SendGrid)");

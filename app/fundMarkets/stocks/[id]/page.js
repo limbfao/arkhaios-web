@@ -1,30 +1,39 @@
-import { headers } from "next/headers";
-import StockChart from "../stockChart";
-import PlaceStockOrder from "../placeStockOrder";
-import StockNews from "../stockNews";
-import CompanyPeers from "../companyPeers";
+import Link from "next/link";
+import FundTrade from "../FundTrade";
+import { EmptyState } from "../../../components/ui";
+import { currentUser, loadManagedFund } from "../../../funds-home/fundServer";
+
+export const dynamic = "force-dynamic";
+
+export function generateMetadata({ params }) {
+  return { title: `Trade ${decodeURIComponent(params.id).toUpperCase()} for your fund · Arkhaios` };
+}
 
 export default async function Page({ params }) {
-  var quote = 0;
-  let list = headers();
+  const symbol = decodeURIComponent(params.id).toUpperCase();
+  const user = await currentUser();
+  const { fund } = await loadManagedFund(user);
 
-  const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+  if (!fund) {
+    return (
+      <div className="page">
+        <div className="panel">
+          <EmptyState
+            title="Only portfolio managers can trade for a fund"
+            description="Start a fund to trade on behalf of its members, or trade this stock in your own account."
+            action={
+              <div className="flex gap-2">
+                <Link href="/dashboard" className="btn btn-primary btn-sm">Start a fund</Link>
+                <Link href={`/markets/stocks/${encodeURIComponent(symbol)}`} className="btn btn-ghost btn-sm border border-line">
+                  Trade {symbol} personally
+                </Link>
+              </div>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
 
-  return (
-    <div className="pl-12 grid grid-cols-2 pt-12">
-      <div className="justify-self-center max-w-7xl pl-10">
-        <StockChart symbol={params.id} />
-      </div>
-      <div className="justify-self-end pr-10 max-w-2xl">
-        <PlaceStockOrder symbol={params.id} />
-      </div>
-      <div classnName="justify-self-center">
-        <p className="font-bold">{params.id.toUpperCase() + " "}News</p>
-        <StockNews symbol={params.id} />
-      </div>
-      <div className="justify-self-end pr-10 max-w-2xl">
-        <CompanyPeers symbol={params.id} />
-      </div>
-    </div>
-  );
+  return <FundTrade fund={fund} symbol={symbol} />;
 }

@@ -1,105 +1,80 @@
 const db = require('../../util/db.js');
 const { randomInt } = require('node:crypto')
-const {RESPONSE_TYPE} = require('../response_type.js')
+const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type.js')
 const { v4: uuidv4 } = require('uuid');
-
 const { logger } = require('../../util/logger')
-
 const { fundPeriods, fundType } = require('./exports.js')
+const { withDb } = require('./lib.js');
+
+// New funds open for deposits for this long before trading starts
+const RECRUIT_DAYS = 14;
 
 module.exports = {
     route: '/api/fund/create',
     kyc: true,
     post: async function(req, res, user) {
         try {
-            // Required parameters: name, description, disbursement period, disbursement type, public (y/n)
+            // Required parameters: name, symbol, description, disbursement period, disbursement type, public (y/n)
             // Valid disbursement periods and types can be seen within fund/exports.js
-            const { name, symbol, description, disbursementPeriod, disbursementType, public } = req.body;
+            const body = req.body || {};
+            const name = String(body.name || '').trim();
+            const symbol = String(body.symbol || '').trim();
+            const description = String(body.description || '').trim();
+            const { disbursementPeriod, disbursementType } = body;
+            const isPublic = body.public;
+            const fail = (message) => res.status(400).json({ status: RESPONSE_TYPE.FAILED, message });
 
-            if(name.length < 2) {
-                res.status(401).json({status: RESPONSE_TYPE.ERROR, message: "Fund name must be at least 2 characters"});
-            } else {
-                if(!disbursementPeriod || !fundPeriods.includes(disbursementPeriod)) {
-                    return res.status(401).json({status: RESPONSE_TYPE.FAILED, message: "Invalid fund disbursement period"});
-                } else if(!disbursementType || !fundType.includes(disbursementType)) {
-                    return res.status(401).json({status: RESPONSE_TYPE.FAILED, message: "Invalid fund disbursement type"});
-                } else if(public != true && public != false) {
-                    return res.status(401).json({status: RESPONSE_TYPE.FAILED, message: "Invalid visibility setting"});
-                } else if(!symbol || symbol?.length > 8 || symbol?.length < 2) {
-                    return res.status(401).json({status: RESPONSE_TYPE.FAILED, message: "Symbol limited to 2-8 characters"});
-                } else if(!(/^[A-Z]+$/).test(symbol)) {
-                    return res.status(401).json({status: RESPONSE_TYPE.FAILED, message: "Symbol limited to upper case characters"});
-                }
+            if(name.length < 2 || name.length > 60) return fail("Fund name must be 2 to 60 characters");
+            if(!/^[A-Z]{2,8}$/.test(symbol)) return fail("Symbol must be 2 to 8 uppercase letters");
+            if(description.length < 10) return fail("Describe the fund's strategy in at least 10 characters");
+            if(description.length > 1000) return fail("Descriptions are limited to 1,000 characters");
+            if(!fundPeriods.includes(disbursementPeriod)) return fail("Invalid fund disbursement period");
+            if(!fundType.includes(disbursementType)) return fail("Invalid fund fee structure");
+            if(isPublic !== true && isPublic !== false) return fail("Invalid visibility setting");
 
-                let data = {};
-                
-                data["fundName"] = name;
-                data["fundID"] = uuidv4();
-                data["fundSymbol"] = symbol;
-                data["fundDescription"] = description;
-                data["portfolioManagers"] = [user.accountID];
-                data["fundFounder"] = user.accountID;
-                data["publiclyAvailable"] = public;
+            const now = Date.now();
+            const data = {
+                fundName: name,
+                fundID: uuidv4(),
+                fundSymbol: symbol,
+                fundDescription: description,
+                portfolioManagers: [user.accountID],
+                fundFounder: user.accountID,
+                publiclyAvailable: isPublic,
+                fundValue: 0,
+                startValue: 0,
+                accessCode: Array.from({length: 6}, () => randomInt(10)).join(''),
+                memberRequests: [],
+                members: [user.accountID],
+                fundDisbursementPeriod: disbursementPeriod,
+                disbursementType: disbursementType,
+                dateCreated: now,
+                fundRecruiting: true,
+                recruitEnd: Math.floor(now / 1000) + RECRUIT_DAYS * 86400,
+                availableBalance: "0",
+                withdrawableFunds: "0",
+                inJournals: [],
+                outJournals: [],
+                completedJournals: [],
+                contributions: [],
+            };
 
-                data["fundValue"] = 0;
+            const outcome = await withDb(async (conn) => {
+                const funds = conn.collection('FundPortfolios');
+                if(await funds.findOne({ fundFounder: user.accountID })) return "You already manage a fund";
+                if(await funds.findOne({ fundSymbol: symbol })) return `The symbol ${symbol} is already taken`;
+                await funds.insertOne(data);
+                return null;
+            });
 
-                data["accessCode"] = Array.from({length: 6},
-                    () => randomInt(10)).join('');
+            if(outcome) return fail(outcome);
 
-                data["memberRequests"] = [];
-                
-                data["members"] = [user.accountID];
-                
-                data["fundDisbursementPeriod"] = disbursementPeriod;
-
-                data["disbursementType"] = disbursementType;
-                
-                data["dateCreated"] = Date.now();
-
-                data["availableBalance"] = "0";
-
-                data["withdrawableFunds"] = "0";
-
-                data["inJournals"] = [];
-
-                data["outJournals"] = [];
-
-                data["completedJournals"] = [];
-
-                let created = false;
-
-                await db.connect(async (db) => {
-                    try {
-                        let fund = await db.collection('FundPortfolios').findOne({"fundFounder": user.accountID});
-                        if(fund) {
-                            return res.status(200).json({status: RESPONSE_TYPE.FAILED, message: 'Cannot create multiple funds', data: {}});
-                        } else {
-                            await db.collection('FundPortfolios').insertOne(data);
-
-                            created = true;
-                        }
-                    } catch(e) {
-                        logger.log({
-                            level: 'error',
-                            message: e
-                        })
-
-                        res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
-                    }
-                });
-
-                if(created) {
-                    await db.updateUser(user, { fundsManaging: data["fundID"] }, "$push");
-                    res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: 'fund successfully created', data: {fundID: data["fundID"]}});
-                }
-            }
+            await db.updateUser(user, { fundsManaging: data.fundID }, "$push");
+            res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: 'Fund created',
+                data: { fundID: data.fundID, symbol } });
         } catch(e) {
-            logger.log({
-                level: 'error',
-                message: e
-            })
-
-            res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
+            logger.log({ level: 'error', message: e });
+            SERVER_ERROR(res);
         }
     }
 }

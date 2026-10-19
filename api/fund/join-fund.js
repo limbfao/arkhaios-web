@@ -1,122 +1,75 @@
-const db = require('../../util/db.js');
-const logger = require('../../util/logger.js');
-const { RESPONSE_TYPE } = require('../response_type.js')
+const { logger } = require('../../util/logger.js');
+const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type.js')
+const { withDb, isManager } = require('./lib.js');
 
+// type 'request': a user asks to join (private funds need the access code).
+// type 'response': a portfolio manager accepts or rejects a pending request.
 module.exports = {
     route: '/api/fund/join',
     kyc: true,
     post: async function(req, res, user) {
-        let error = '';
-
         try {
-            let fund = null;
-            const { fundID, type, inquiry } = req.body;
+            const { fundID, type } = req.body || {};
+            const fail = (code, message) => res.status(code).json({ status: RESPONSE_TYPE.FAILED, message });
 
-            await db.connect(async (db) => {
-                try {
-                    fund = await db.collection('FundPortfolios').findOne({fundID});
-                    if(!fund) error = 'invalid fund';
-                } catch(e) {
-                    res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
-                    return;
-                }
+            const result = await withDb(async (db) => {
+                const funds = db.collection('FundPortfolios');
+                const fund = await funds.findOne({ fundID });
+                if(!fund) return fail(404, 'Fund not found');
 
-                if(fund) {
-                    if(type == 'request') {
-                        if(fund.members.includes(user.accountID)) {
-                            res.status(401).json({status: RESPONSE_TYPE.FAILED, message: 'you are already in this fund'})
-                            return
-                        }
+                if(type == 'request') {
+                    const inquiry = String(req.body.inquiry || '').trim().slice(0, 500);
 
-                        let requested = fund.memberRequests.filter((request) => request.user == user.accountID).length;
-                        if(requested) {
-                            res.status(401).json({status: RESPONSE_TYPE.FAILED, message: 'you have already requested to join this fund'})
-                            return
-                        }
-
-                        if(!fund.publiclyAvailable) {
-                            if(req.body.accessCode == fund.accessCode) {
-                                await db.collection('FundPortfolios').updateOne({fundID},
-                                    { $addToSet: { memberRequests: { user: user.accountID, inquiry: inquiry }},
-                                })
-
-                                res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: 'request sent'})
-                            }
-                            else {
-                                res.status(401).json({status: RESPONSE_TYPE.FAILED, message: 'invalid access code'});
-                            }
-                        } else {
-                            await db.collection('FundPortfolios').updateOne({fundID},
-                                { $addToSet: { memberRequests: { user: user.accountID, inquiry: inquiry }},
-                            })
-
-                            res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: 'request sent'})
-                        }
-                        
-                    } else if(type == 'response') {
-                        if(!fund.portfolioManagers.includes(user.accountID)) {
-                            return res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: 'unauthorized', data: {}});
-                        }
-
-                        const requester = req.body.requester;
-                        const action = req.body.action;
-
-                        let requested = fund.memberRequests.filter((request) => request.user == requester).length;
-                        if(requested) {
-                            if(action == 'accept') {
-                                try { 
-                                    await db.collection('FundPortfolios').updateOne({fundID},
-                                        { $pull: { memberRequests: { user: requester } },
-                                        $addToSet: { members: requester }
-                                    })
-
-                                    await db.collection('Friends').updateOne({
-                                        accountID: fund.fundFounder
-                                    }, {
-                                        $addToSet: { friends: requester }
-                                    }, {upsert: true})
-
-                                    await db.collection('Friends').updateOne({
-                                        accountID: requester
-                                    }, {
-                                        $addToSet: { friends: fund.fundFounder }
-                                    }, {upsert: true})
-
-                                    res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: 'user accepted into fund'});
-                                } catch(e) {
-                                    res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
-                                    return
-                                }
-                            } else if(action == 'reject') {
-                                try {
-                                    await db.collection('FundPortfolios').updateOne({fundID},
-                                        { $pull: { memberRequests: { user: requester } } });
-
-                                    res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: 'user rejected'});
-                                } catch(e) {
-                                    res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
-                                    return
-                                }  
-                            } else {
-                                res.status(401).json({status: RESPONSE_TYPE.FAILED, message: 'valid actions are either accept/reject'});
-                                return
-                            }
-                        } else {
-                            res.status(401).json({status: RESPONSE_TYPE.FAILED, message: 'invalid user'});
-                            return
-                        }
+                    if(fund.members?.includes(user.accountID) || isManager(fund, user)) {
+                        return fail(400, 'You are already a member of this fund');
                     }
-                } else {
-                    error = 'invalid type';
-                }
-            });
-        } catch(e) {
-            res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
+                    if((fund.memberRequests || []).some((r) => r.user == user.accountID)) {
+                        return fail(400, 'You have already requested to join this fund');
+                    }
+                    if(!fund.publiclyAvailable && String(req.body.accessCode || '').trim() != fund.accessCode) {
+                        return fail(400, 'That access code is not valid');
+                    }
 
-            logger.log({
-                level: 'error',
-                message: e
-            })
+                    await funds.updateOne({ fundID },
+                        { $addToSet: { memberRequests: { user: user.accountID, inquiry } } });
+                    return res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: 'Request sent' });
+                }
+
+                if(type == 'response') {
+                    if(!isManager(fund, user)) return fail(401, 'unauthorized');
+
+                    const { requester, action } = req.body;
+                    if(!(fund.memberRequests || []).some((r) => r.user == requester)) {
+                        return fail(404, 'That request no longer exists');
+                    }
+
+                    if(action == 'accept') {
+                        await funds.updateOne({ fundID }, {
+                            $pull: { memberRequests: { user: requester } },
+                            $addToSet: { members: requester },
+                        });
+                        await db.collection('Friends').updateOne({ accountID: fund.fundFounder },
+                            { $addToSet: { friends: requester } }, { upsert: true });
+                        await db.collection('Friends').updateOne({ accountID: requester },
+                            { $addToSet: { friends: fund.fundFounder } }, { upsert: true });
+                        return res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: 'Member accepted' });
+                    }
+
+                    if(action == 'reject') {
+                        await funds.updateOne({ fundID }, { $pull: { memberRequests: { user: requester } } });
+                        return res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: 'Request declined' });
+                    }
+
+                    return fail(400, 'Valid actions are accept and reject');
+                }
+
+                return fail(400, 'Invalid request type');
+            });
+
+            return result;
+        } catch(e) {
+            logger.log({ level: 'error', message: e });
+            SERVER_ERROR(res);
         }
     }
 }

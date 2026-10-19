@@ -1,8 +1,9 @@
-const db = require('../../util/db.js');
-const { RESPONSE_TYPE } = require('../response_type.js')
-
+const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type.js')
 const { logger } = require('../../util/logger')
+const { withDb, isManager, investedByMember } = require('./lib.js');
 
+// Members, managers and pending join requests of a fund (portfolio managers only).
+// Each member carries the capital they have contributed (`invested`).
 module.exports = {
     route: '/api/fund/members',
     kyc: true,
@@ -10,79 +11,55 @@ module.exports = {
         try {
             const id = req.query.id;
 
-            if(!user.fundsManaging?.includes(id)) {
-                return res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized"});
+            const result = await withDb(async (db) => {
+                const fund = await db.collection('FundPortfolios').findOne({ fundID: id });
+                if(!fund || !isManager(fund, user)) return null;
+
+                const ids = [...new Set([
+                    ...(fund.members || []),
+                    ...(fund.portfolioManagers || []),
+                    ...(fund.memberRequests || []).map((r) => r.user),
+                ])];
+
+                const list = ids.length ? await db.collection('Users').find(
+                    { accountID: { $in: ids } },
+                    { projection: { accountID: 1, firstName: 1, lastName: 1, username: 1 } }
+                ).toArray() : [];
+                const byId = Object.fromEntries(list.map((u) => [u.accountID, u]));
+                const invested = investedByMember(fund);
+
+                const person = (accountID) => {
+                    const u = byId[accountID];
+                    return {
+                        id: accountID,
+                        name: u ? `${u.firstName} ${u.lastName}` : 'Unknown user',
+                        username: u?.username || null,
+                    };
+                };
+
+                return {
+                    members: (fund.members || []).filter((m) => byId[m]).map((m) => ({
+                        ...person(m),
+                        invested: +(invested[m] || 0).toFixed(2),
+                        manager: (fund.portfolioManagers || []).includes(m),
+                    })),
+                    managers: (fund.portfolioManagers || []).filter((m) => byId[m]).map(person),
+                    requests: (fund.memberRequests || []).filter((r) => byId[r.user]).map((r) => ({
+                        ...person(r.user),
+                        inquiry: r.inquiry || '',
+                    })),
+                    totalInvested: +Object.values(invested).reduce((n, v) => n + v, 0).toFixed(2),
+                };
+            });
+
+            if(!result) {
+                return res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized" });
             }
 
-            await db.connect(async (db) => {
-                try {
-                    let fund = await db.collection('FundPortfolios').findOne({
-                        fundID: id
-                    });
-
-                    let users = [];
-                    let members = [];
-                    let managers = [];
-                    let requests = [];
-                    for(let i = 0; i < fund.members?.length; ++i) {
-                        users.push({accountID: fund.members[i]});
-                    }
-
-                    for(let i = 0; i < fund.portfolioManagers?.length; ++i) {
-                        users.push({accountID: fund.portfolioManagers[i]});
-                    }
-
-                    for(let i = 0; i < fund.memberRequests?.length; ++i) {
-                        users.push({accountID: fund.memberRequests[i].user});
-                    }
-
-                    const list = await db.collection('Users').find({$or: users}).toArray();
-
-                    for(let i = 0; i < list.length; ++i) {
-                        if(fund.portfolioManagers?.includes(list[i].accountID)) {
-                            managers.push({
-                                name: list[i].firstName + " " + list[i].lastName,
-                                id: list[i].accountID,
-                            })
-                        }
-
-                        if(fund.members?.includes(list[i].accountID)) {
-                            members.push({
-                                name: list[i].firstName + " " + list[i].lastName,
-                                id: list[i].accountID,
-                            })
-                        }
-
-                        for(let j = 0; j < fund.memberRequests.length; ++j) {
-                            if(fund.memberRequests[j].user == list[i].accountID) {
-                                requests.push({
-                                    name: list[i].firstName + " " + list[i].lastName,
-                                    id: list[i].accountID,
-                                    inquiry: fund.memberRequests[j].inquiry
-                                })
-                            }
-                        }
-                    }
-
-                    res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: "", data: {
-                        members: members,
-                        managers: managers,
-                        requests: requests
-                    }});
-                } catch(e) {
-                    logger.log({
-                        level: 'error',
-                        message: e
-                    })
-                }
-            });
+            res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: "", data: result });
         } catch(e) {
-            res.status(401).json({status: RESPONSE_TYPE.ERROR, message: 'server error'});
-
-            logger.log({
-                level: 'error',
-                message: e
-            })
+            logger.log({ level: 'error', message: e });
+            SERVER_ERROR(res);
         }
     }
 }
