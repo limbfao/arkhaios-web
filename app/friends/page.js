@@ -12,7 +12,9 @@ export default function Page() {
 
   useEffect(() => {
     // Initialize the websocket connection here
-    const ws = new WebSocket("wss://arkhaios.io/message-handler");
+    // Connect to whichever host served the page (arkhaios.io, localhost, ...)
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/message-handler`);
     setWebsocket(ws); // Store the websocket instance in state
 
     return () => {

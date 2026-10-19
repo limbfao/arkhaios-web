@@ -5,6 +5,7 @@ const aes = require('../aes');
 const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
 const { hash } = require('../hashAlgo');
 const { logger } = require('../../util/logger')
+const { sessionCookieOptions } = require('../../util/cookies')
 
 module.exports = {
     route: "/api/account/login",
@@ -13,8 +14,6 @@ module.exports = {
         try {
             var error = '';
             let data = {};
-
-            const hostname = req.hostname;
 
             let response = RESPONSE_TYPE.FAILED;
 
@@ -84,8 +83,8 @@ module.exports = {
             if(error != '') {
                 res.status(401).json({status: response, message: error});
             } else {
-                res.cookie('email', email, { maxAge: sessionExpiry, httpOnly: true, sameSite: 'none', domain: hostname, secure: true});
-                res.cookie('session', data.session, { maxAge: sessionExpiry, httpOnly: true, sameSite: 'none', domain: hostname, secure: true});
+                res.cookie('email', email, sessionCookieOptions(req, sessionExpiry));
+                res.cookie('session', data.session, sessionCookieOptions(req, sessionExpiry));
 
                 res.status(200).json({ status: response, message: error, data: data });
             }

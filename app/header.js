@@ -68,7 +68,14 @@ export default function Header({ user }) {
 
     fetchData();
 
-    const events = new EventSource("https://compute.arkhaios.io/api/events", { withCredentials: true });
+    // Live notifications come from the compute service, which only exists in production
+    // unless NEXT_PUBLIC_EVENTS_URL points somewhere else
+    const eventsURL = process.env.NEXT_PUBLIC_EVENTS_URL ||
+      (process.env.NODE_ENV === "production" ? "https://compute.arkhaios.io/api/events" : null);
+
+    if(!eventsURL) return;
+
+    const events = new EventSource(eventsURL, { withCredentials: true });
 
     events.onmessage = (event) => {
       try {

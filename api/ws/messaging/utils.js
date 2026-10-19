@@ -11,6 +11,9 @@ async function oauthBearerTokenProvider(region) {
 }
 
 async function createKafkaTopic(topicName) {
+    // Kafka (AWS MSK) is unreachable outside production; dev delivers chat over local sockets
+    if(process.env.NODE_ENV != 'production') return;
+
     const kafka = new Kafka({
         clientId: 'arkhaios-web',
         brokers: ['b-1.messager.x6qzep.c6.kafka.us-east-2.amazonaws.com:9098','b-2.messager.x6qzep.c6.kafka.us-east-2.amazonaws.com:9098'],

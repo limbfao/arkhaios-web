@@ -143,9 +143,11 @@ nextApp.prepare()
  */
   // Subdomain parsing middleware
   server.use((req, res, nextApp) => {
-    const host = req.headers.host;
+    const host = req.headers.host.split(':')[0];
     const hostParts = host.split('.');
-    req.subdomains = hostParts.slice(0, -2); // Adjust depending on your TLD length
+    // "funds.localhost" has a one-part base domain; "funds.arkhaios.io" / "funds.local.test" have two
+    const baseLength = hostParts[hostParts.length - 1] == 'localhost' ? 1 : 2;
+    req.subdomains = hostParts.slice(0, -baseLength);
     nextApp();
   });
 
@@ -205,14 +207,20 @@ nextApp.prepare()
     } catch(e) {}
   }
 
+  // Route all upgrades through `upgrade` (which forwards HMR to Next), attaching it only once
+  // since Next registers its own listener lazily on the first page request
   const originalOn = httpServer.on.bind(httpServer);
+  let upgradeAttached = false;
   httpServer.on = function(event, listener) {
     if(event == 'upgrade') {
+      if(upgradeAttached) return httpServer;
+      upgradeAttached = true;
       return originalOn(event, upgrade);
     } else {
       return originalOn(event, listener);
     }
   }
+  httpServer.on('upgrade');
 
   route(server);
 

@@ -6,6 +6,7 @@ const { hash } = require('../hashAlgo');
 const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
 
 const { logger } = require('../../util/logger')
+const { sessionCookieOptions } = require('../../util/cookies')
 
 function generateUsername() {
     const numberDictionary = NumberDictionary.generate({ min: 100, max: 999 });
@@ -34,7 +35,6 @@ module.exports = {
             
             const { firstName, lastName, email, password } = req.body;
             
-            const hostname = req.hostname;
 
             let { hashed, salt, iter } = hash(password, '', 0); // Hash password with SHA256
             let username = generateUsername(); // Generate username Ex: Fast-Red-Elephant-281
@@ -114,8 +114,8 @@ module.exports = {
                 sendgrid.sendCode(email,
                     "Your Verification Code", "Thank you for joining Arkhaios!");
 
-                res.cookie('email', email, { maxAge: sessionExpiry, httpOnly: true, sameSite: 'none', domain: hostname, secure: true});
-                res.cookie('session', session, { maxAge: sessionExpiry, httpOnly: true, sameSite: 'none', domain: hostname, secure: true});
+                res.cookie('email', email, sessionCookieOptions(req, sessionExpiry));
+                res.cookie('session', session, sessionCookieOptions(req, sessionExpiry));
 
                 res.status(201).json({ status: response, message: 'account created', data: {
                     session, username, email
