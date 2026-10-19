@@ -4,10 +4,13 @@ import Redirect from "./components/redirect";
 import { redirect } from "next/navigation";
 import "./globals.css";
 import { GeistSans } from "geist/font/sans";
-import { NextResponse} from 'next/server';
+import { Marcellus } from "next/font/google";
 import Header from "./header";
 import { UserContextProvider } from "./UserContext";
 import SideBar from "./sidebar";
+// Roman inscriptional serif for page titles and fund names
+const display = Marcellus({ weight: "400", subsets: ["latin"], variable: "--font-display" });
+
 export const metadata = {
   title: "Arkhaios",
   description: "Arkhaios",
@@ -67,19 +70,13 @@ export default async function RootLayout({ children }) {
 
   const renderAuthenticatedContent = () => (
     <UserContextProvider user={user}>
-      <div>
-        <nav className="border-b border-amber-100 w-full fixed bg-black z-[100]">
-          {" "}
-          {/* <- You can add a border by putting 'border-b-2'*/}
-          <Header user={user} />
-        </nav>
-        <div className="grid grid-cols-[64px_1fr]">
-          <aside className="bg-black w-16">
-            <SideBar/>
-          </aside>
-          <main className= "pt-16">{children}</main>
-        </div>
-      </div>
+      <header className="fixed inset-x-0 top-0 z-[100] h-16 border-b border-line bg-basalt/95 backdrop-blur">
+        <Header user={user} />
+      </header>
+      <aside className="fixed bottom-0 left-0 top-16 z-[90] w-16 border-r border-line bg-basalt">
+        <SideBar />
+      </aside>
+      <main className="min-h-screen pl-16 pt-16">{children}</main>
     </UserContextProvider>
   );
 
@@ -88,15 +85,17 @@ export default async function RootLayout({ children }) {
   return (
     <html
       data-theme="customBlackTheme"
-      className={GeistSans.className}
+      className={`${GeistSans.className} ${GeistSans.variable} ${display.variable}`}
       lang="en"
     >
-      <title>Arkhaios</title>
-      <link
-        rel="icon"
-        type="image/x-icon"
-        href="/trimmedNoBackgroundHDArkhaiosLogo.ico"
-      ></link>
+      <head>
+        <title>Arkhaios</title>
+        <link
+          rel="icon"
+          type="image/x-icon"
+          href="/trimmedNoBackgroundHDArkhaiosLogo.ico"
+        ></link>
+      </head>
       <body className={GeistSans.className}>
         <Redirect authenticated={user} />
         {allowAuthenticated ? renderAuthenticatedContent() : renderUnauthenticatedContent()}

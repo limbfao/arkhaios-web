@@ -1,7 +1,6 @@
 "use client";
 import React, { createContext, useState, useContext, useEffect } from "react";
 import Link from "next/link";
-import "../../output.css";
 import "../globals.css";
 import "./../components/components.css";
 

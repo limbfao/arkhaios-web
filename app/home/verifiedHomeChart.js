@@ -6,7 +6,6 @@ import {
   CrosshairMode,
   LineStyle,
 } from "lightweight-charts";
-import "../../output.css";
 import "../globals.css";
 
 /*

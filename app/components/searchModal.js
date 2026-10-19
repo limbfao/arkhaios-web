@@ -1,174 +1,126 @@
+"use client"
 import { useRouter } from "next/navigation";
-import "./components.css";
-import { useState, useEffect } from "react";
-import useFetch from "../hooks/useFetch";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import useDebounce from "../hooks/useDebounce";
-export default function SearchModal({ onClose, isOpen }) {
+import { AssetLogo } from "./ui";
 
-  const [searchInput, setSearchInput] = useState();
+const KIND = { CRYPTO: "Crypto", FUNDS: "Fund" };
+
+function routeFor(asset, inFundContext) {
+  if (asset.exchange === "CRYPTO") return `/markets/crypto/${asset.symbol.replace("/USD", "-usd").toLowerCase()}`;
+  if (asset.exchange === "FUNDS") return `/markets/funds/${asset.symbol}`;
+  // Fund managers trade on behalf of their fund from the fund pages
+  return inFundContext ? `/fundMarkets/stocks/${asset.symbol}` : `/markets/stocks/${asset.symbol}`;
+}
+
+export default function SearchModal({ onClose }) {
   const router = useRouter();
-  const [response, setResponse] = useState([{ id: "0" }]);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-
-  const debouncedValue = useDebounce(searchInput, 400);
-  const handleInputChange = (event) => {
-    setSearchInput(event.target.value);
-  };
-
-  const { error, isLoading, responseJSON } = useFetch(
-    "/api/search?query=" + debouncedValue
-  );
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const debounced = useDebounce(query, 200);
 
   useEffect(() => {
-    if (responseJSON != null && responseJSON.data) {
-      setResponse(responseJSON.data || [{}]);
-    }
-  }, [isLoading, responseJSON]);
-
-  const highlightMatch = (text, searchInput) => {
-    
-    if (!searchInput) {
-      return text;
+    const term = debounced?.trim();
+    if (!term) {
+      setResults([]);
+      return;
     }
 
-    if (text) {
-      const regex = new RegExp(`(${searchInput})`, "gi");
-      const parts = text.split(regex);
+    let cancelled = false;
+    setLoading(true);
 
-      return parts.map((part, index) =>
-      regex.test(part) ? (
-        <span key={index} className="text-yellow-200">
-          {part}
-        </span>
-      ) : (
-        part
-      )
-    );
-    }
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // Only respond to key events when the modal is visible
-      const modal = document?.getElementById("searchModal");
-      if (modal && isOpen) {
-        if (event.key === "ArrowDown") {
-          event.preventDefault();
-          setHighlightedIndex((prevIndex) =>
-            Math.min(prevIndex + 1, response.length - 1)
-          );
-        } else if (event.key === "ArrowUp") {
-          event.preventDefault();
-          setHighlightedIndex((prevIndex) => Math.max(prevIndex - 1, 0));
-        } else if (event.key === "Enter" && highlightedIndex >= 0) {
-          event.preventDefault();
-          handleSelectItem(response[highlightedIndex]);
+    // Funds are searched with an "F:" prefix; show both kinds for any query
+    const fundQuery = term.toUpperCase().startsWith("F:") ? term : "F:" + term;
+    Promise.all([
+      term.toUpperCase().startsWith("F:") ? Promise.resolve({ data: [] }) :
+        fetch("/api/search?query=" + encodeURIComponent(term)).then((r) => r.json()),
+      fetch("/api/search?query=" + encodeURIComponent(fundQuery)).then((r) => r.json()),
+    ])
+      .then(([assets, funds]) => {
+        if (!cancelled) {
+          setResults([...(assets.data || []), ...(funds.data || [])]);
+          setHighlighted(0);
         }
-      }
-    };
+      })
+      .catch(() => !cancelled && setResults([]))
+      .finally(() => !cancelled && setLoading(false));
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [highlightedIndex, response]);
+    return () => { cancelled = true; };
+  }, [debounced]);
 
-  const handleSelectItem = (asset) => {
-  
-    let route =
-      asset.exchange === "CRYPTO"
-        ? `/markets/crypto/${changeToCrypto(asset.symbol)}`
-        : (
-      asset.exchange == "FUNDS"
-        ? `/markets/funds/${asset.symbol}`
-        : `/markets/stocks/${asset.symbol}`);
-
-      
-        if (window.location.href.includes('/dashboard') || window.location.href.includes('/fundFinances')) {
-          route = `/fundMarkets/stocks/${asset.symbol}`
-        }
-    router.push(route);
+  const select = (asset) => {
+    const inFundContext = /^\/(dashboard|fundFinances|fundMarkets)/.test(window.location.pathname);
+    router.push(routeFor(asset, inFundContext));
     onClose();
   };
 
-  const handleMouseEnter = (index) => {
-    setHighlightedIndex(index);
+  const onKeyDown = (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlighted((i) => Math.min(i + 1, results.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlighted((i) => Math.max(i - 1, 0));
+    } else if (event.key === "Enter" && results[highlighted]) {
+      event.preventDefault();
+      select(results[highlighted]);
+    } else if (event.key === "Escape") {
+      onClose();
+    }
   };
-
-  const handleMouseLeave = () => {
-    setHighlightedIndex(-1);
-  };
-
-  function changeToCrypto(symbol) {
-    return symbol.replace("/USD", "-usd").toLowerCase();
-  }
 
   return (
-    <>
-      <div className="container-input text-white">
-        <svg
-          fill="white"
-          width="20px"
-          height="20px"
-          viewBox="0 0 1920 1920"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M790.588 1468.235c-373.722 0-677.647-303.924-677.647-677.647 0-373.722 303.925-677.647 677.647-677.647 373.723 0 677.647 303.925 677.647 677.647 0 373.723-303.924 677.647-677.647 677.647Zm596.781-160.715c120.396-138.692 193.807-319.285 193.807-516.932C1581.176 354.748 1226.428 0 790.588 0S0 354.748 0 790.588s354.748 790.588 790.588 790.588c197.647 0 378.24-73.411 516.932-193.807l516.028 516.142 79.963-79.963-516.142-516.028Z"
-            fillRule="nonzero"
-          ></path>
-        </svg>
+    <div onKeyDown={onKeyDown}>
+      <div className="flex items-center gap-3 border-b border-line px-4">
+        <MagnifyingGlassIcon className="h-5 w-5 text-muted" />
         <input
+          autoFocus
           type="text"
-          placeholder="Search Stocks, Futures, Funds, Crypto"
-          name="text"
-          className="text-white searchInput px-10 interFont text-sm"
-          readOnly={!(isOpen)}
-          value={searchInput}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by symbol, company or fund"
           autoComplete="off"
-          onChange={handleInputChange}
+          className="h-14 w-full bg-transparent text-base text-marble placeholder:text-muted/70 focus:outline-none"
         />
+        {loading ? <span className="loading loading-spinner loading-sm text-muted" /> : null}
       </div>
-      {isLoading ? (
-        <div className="grid place-content-center">
-          <div className="place-content-center justify-self-center buttonLoader cursor-progress">
-            <svg viewBox="25 25 50 50">
-              <circle r="20" cy="50" cx="50"></circle>
-            </svg>
-          </div>  
-        </div>
-      ) : (
-        <>
-          {response?.map((asset, index) => (
-            <div
-              key={asset.id}
-              className={`py-1 overflow-hidden ${
-                highlightedIndex === index ? "bg-[#1E2124]" : ""
+
+      <div className="max-h-[50vh] overflow-y-auto p-2">
+        {!query.trim() ? (
+          <p className="px-3 py-6 text-center text-sm text-muted">
+            Try AAPL, Bitcoin, or a fund name like Growth.
+          </p>
+        ) : results.length === 0 && !loading ? (
+          <p className="px-3 py-6 text-center text-sm text-muted">No matches for “{query}”.</p>
+        ) : (
+          results.map((asset, index) => (
+            <button
+              key={asset.id || asset.symbol + asset.exchange}
+              onClick={() => select(asset)}
+              onMouseEnter={() => setHighlighted(index)}
+              className={`flex w-full items-center gap-3 rounded-btn px-3 py-2.5 text-left ${
+                highlighted === index ? "bg-slate" : ""
               }`}
-              onMouseEnter={() => handleMouseEnter(index)}
-              onMouseLeave={handleMouseLeave}
             >
-              <div
-                role="button"
-                onClick={() => handleSelectItem(asset)}
-                className="rounded-sm px-4 py-1 grid grid-cols-2 gap-x-2 cursor-pointer"
-              >
-                <div className="">
-                  <div className="flex flex-row"></div>
-                  <div className="text-white font-light text-sm">
-                    {highlightMatch(asset.symbol, searchInput)}
-                  </div>
-                  <div className="text-white font-thin text-sm">
-                    {asset.exchange}
-                  </div>
-                </div>
-                <div className="text-white truncate">
-                  {highlightMatch(asset.name, searchInput)}
-                </div>
-              </div>
-            </div>
-          ))}
-        </>
-      )}
-    </>
+              {asset.exchange === "FUNDS" ? (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-bronze/15 font-display text-sm text-bronze">
+                  {asset.symbol.slice(0, 1)}
+                </span>
+              ) : (
+                <AssetLogo symbol={asset.symbol} size={32} />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-marble">{asset.symbol}</span>
+                <span className="block truncate text-xs text-muted">{asset.name}</span>
+              </span>
+              <span className="text-xs text-muted">{KIND[asset.exchange] || asset.exchange}</span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
   );
 }

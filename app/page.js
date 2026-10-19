@@ -4,7 +4,6 @@ import Link from "next/link";
 
 import gsap from "gsap";
 import "./globals.css";
-import "./../output.css";
 import Carousel from "./components/logoCarousel/carousel";
 import Cards from "./components/homeCards/cards";
 export default function Page() {

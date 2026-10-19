@@ -1,5 +1,4 @@
 import '../../globals.css'
-import '../../../output.css'
 
 export default function Page() {
     return (

@@ -1,6 +1,5 @@
 'use client'
 import Link from 'next/link'
-import "../../output.css";
 import "../globals.css";
 import { useState , useContext} from 'react';
 import { RecoveryContext, RecoveryContextProvider } from './RecoveryContext.js';

@@ -1,8 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100;200;300;400;500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100;200;300;400;500;700&display=swap');
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-basalt text-marble antialiased;
+    font-feature-settings: "ss01";
+  }
+
+  /* Prices and quantities line up in columns */
+  .tabular, td, .stat-value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.bronze.DEFAULT');
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: theme('colors.bronze.DEFAULT / 35%');
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.line') transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Standard surface for grouped content */
+  .panel {
+    @apply rounded-box border border-line bg-stone;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between gap-3 border-b border-line px-5 py-3.5;
+  }
+
+  .panel-title {
+    @apply text-sm font-semibold text-marble;
+  }
+
+  .page {
+    @apply mx-auto w-full max-w-[1400px] px-6 py-8 lg:px-10;
+  }
+
+  .page-title {
+    @apply font-display text-4xl leading-tight text-marble;
+  }
+
+  .field {
+    @apply w-full rounded-btn border border-line bg-basalt px-3.5 py-2.5 text-sm text-marble placeholder:text-muted/70 transition-colors focus:border-bronze focus:outline-none;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm text-muted;
+  }
+}
 
 
 /* html, body, div {
@@ -18,13 +86,7 @@
 }
 
 
-body {
-  background-color: #141416 !important;
-  background: rgba(0, 0, 0, 0.5);
-}
-
 a:hover {
-	@apply no-underline;
 	text-decoration: none;
 }
 
@@ -59,13 +121,6 @@ a:hover {
 	@apply inline-block w-4 h-4 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]
 }
 
-input {
-	@apply block pl-0 p-3 pr-10 w-full text-sm text-gray-900 outline-none border-b-2 border-gray-300 focus:border-gray-500;
-}
-
-input:focus {
-	@apply outline-none;
-}
 
 
 
@@ -360,6 +415,6 @@ section span {
 
 @layer components {
   .btn:is(input[type="radio"]:checked) {
-    @apply bg-green-400;
+    @apply border-bronze/40 bg-bronze/15 text-bronze-light;
   }
 }
