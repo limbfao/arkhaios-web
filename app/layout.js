@@ -33,20 +33,25 @@ export default async function RootLayout({ children }) {
   var user = await authenticate.login(email, session);
   
   if (user) {
-    // Remove salt, iter, verificationCode, plaidID 
-    const keysToFilter = ['salt', 'iter', 'verificationCode', 'plaidID'];
-
-    // console.log("Before filter User: " + JSON.stringify(user));
-    user = Object.keys(user).reduce((newUser, key) => {
-      if (!keysToFilter.includes(key)) {
-        newUser[key] = user[key];
-      }
-      return newUser;
-    }, {});
-    // console.log("After Filter User: " + JSON.stringify(user))
+    // Only these fields reach the browser. The user record also holds the password
+    // hash, two-factor secret, session token and encrypted bank tokens.
+    const bankFields = ["key", "institution_name", "institution_id", "name", "mask", "subtype"];
+    user = {
+      accountID: user.accountID,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      emailVerified: !!user.emailVerified,
+      mfaVerified: !!user.mfaVerified,
+      kycVerified: !!user.kycVerified,
+      creationTime: user.creationTime ?? null,
+      fundsManaging: user.fundsManaging || [],
+      bank_accounts: (user.bank_accounts || []).flat().filter(Boolean).map((bank) =>
+        Object.fromEntries(bankFields.filter((f) => f in bank).map((f) => [f, bank[f]]))),
+    };
   }
-  
-  
+
   var allowAuthenticated = false;
   if (!user && !loginPaths.includes(path) && !isPublicPath(path)) {
     redirect("/login");

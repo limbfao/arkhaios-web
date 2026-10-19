@@ -1,23 +1,6 @@
-import { useKYCFlowContext } from "../KYCFlowContext";
-import { useContext } from "react";
-import UserContext from "../../../../../UserContext";
+import { Field, SelectField } from "../KYCFlowContext";
 
-export default function Contact() {
-  const { userData, setUserData } = useKYCFlowContext();
-
-  const { user } = useContext(UserContext);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setUserData(prevState => {
-        const newData = { ...prevState, [name]: value};
-        console.log(newData);
-        return newData;
-    })
-  };
-
-  const states = [
+const STATES = [
     { name: "Alabama", abbreviation: "AL" },
     { name: "Alaska", abbreviation: "AK" },
     { name: "Arizona", abbreviation: "AZ" },
@@ -70,115 +53,20 @@ export default function Contact() {
     { name: "Wyoming", abbreviation: "WY" },
   ];
 
+export default function Contact() {
   return (
-    <div className="flex justify-start flex-col space-y-3">
-      <div className="form-control max-w-sm">
-        <label className="label" htmlFor="phoneNumber">
-          <span className="label-text">Phone Number</span>
-        </label>
-        <input
-          type="text"
-          name="phone"
-          onChange={handleChange}
-          value={userData["phone"] || ""}
-          id="phoneNumber"
-          placeholder="3051234567"
-          className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-          pattern="\d{10}"
-          title="Phone number must be 10 digits"
-          required
-        />
-      </div>
-      <div className="flex space-x-4">
-        <div className="form-control">
-          <label className="label" htmlFor="streetAddress">
-            <span className="label-text">Street Address</span>
-          </label>
-          <input
-            type="text"
-            name="address"
-            onChange={handleChange}
-            value={userData["address"] || ""}
-            id="streetAddress"
-            placeholder="42 Wallaby Way"
-            className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-            required
-            pattern="^[0-9]+\s[A-Za-z0-9\s]+"
-            title="Enter a street number followed by the street name (e.g., 42 Wallaby Way)"
-          />
-        </div>
-
-        <div className="form-control">
-          <label className="label" htmlFor="unitAddress">
-            <span className="label-text">Unit Address</span>
-          </label>
-          <input
-            type="text"
-            name="address_unit"
-            onChange={handleChange}
-            value={userData["address_unit"]}
-            id="unitAddress"
-            placeholder="APT 413"
-            className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-            pattern="^[A-Za-z0-9\s\-\/]+"
-            title="Enter the unit number (e.g., Apt 413 or Suite B)"
-          />
-        </div>
-
-        <div className="form-control">
-          <label className="label" htmlFor="postalCode">
-            <span className="label-text">Postal Code</span>
-          </label>
-          <input
-            type="text"
-            name="postal_code"
-            onChange={handleChange}
-            value={userData["postal_code"] || ""}
-            id="postalCode"
-            placeholder="33193"
-            className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-            required
-            pattern="^[A-Za-z0-9\s\-\/]+"
-            title="Enter your Postal Code"
-          />
-        </div>
-      </div>
-
-      <div className="flex space-x-4">
-        <label className="form-control max-w-md">
-          <div className="label">
-            <span className="label-text">Select your State</span>
-          </div>
-          <select name="state" onChange={handleChange} value={userData["state"] || ""} className="select select-bordered">
-            <option disabled selected>
-              Pick one
-            </option>
-            {states.map((state) => (
-              <option key={state.abbreviation} value={state.abbreviation}>
-                {state.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="form-control">
-          <label className="label" htmlFor="city">
-            <span className="label-text">City</span>
-          </label>
-          <input
-            type="text"
-            name="city"
-            onChange={handleChange}
-            value={userData["city"]}
-            id="city"
-            placeholder="San Mateo"
-            className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-            required
-            pattern="^[A-Za-z]{2}|[A-Za-z]+(?: [A-Za-z]+)?$"
-            title="A city in your state."
-          />
-        </div>
-      </div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+      <Field name="phone" label="Mobile phone" hint="10 digits" placeholder="3051234567" inputMode="tel" autoComplete="tel-national"
+        className="sm:col-span-3" />
+      <div className="hidden sm:col-span-3 sm:block" />
+      <Field name="address" label="Street address" placeholder="42 Wallaby Way" autoComplete="address-line1" className="sm:col-span-4" />
+      <Field name="address_unit" label="Apartment or unit" hint="Optional" placeholder="Apt 413" autoComplete="address-line2"
+        className="sm:col-span-2" />
+      <Field name="city" label="City" placeholder="San Mateo" autoComplete="address-level2" className="sm:col-span-3" />
+      <SelectField name="state" label="State" className="sm:col-span-2"
+        options={STATES.map((s) => ({ value: s.abbreviation, label: s.name }))} />
+      <Field name="postal_code" label="ZIP code" placeholder="94401" inputMode="numeric" autoComplete="postal-code"
+        className="sm:col-span-1" />
     </div>
   );
 }

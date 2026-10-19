@@ -1,37 +1,42 @@
-'use client'
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+"use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  HeartIcon,
+  IdentificationIcon,
+  ShieldCheckIcon,
+  Squares2X2Icon,
+} from "@heroicons/react/24/outline";
 
-export default function SettingsHeader() {
+const LINKS = [
+  { href: "/account/settings", label: "Overview", icon: Squares2X2Icon },
+  { href: "/account/settings/personal-information", label: "Personal information", icon: IdentificationIcon },
+  { href: "/account/settings/security-privacy", label: "Security", icon: ShieldCheckIcon },
+  { href: "/account/settings/beneficiaries", label: "Beneficiaries", icon: HeartIcon },
+];
 
-    const pathname = usePathname();
+export default function SettingsNav() {
+  const pathname = usePathname();
 
-    const headerLink = (path, text) => {
-        const isActive = pathname === path;
-        var fontClass = "font-light"; // Boldneess
-        const textClass = isActive ? "text-amber-200" : "text-white hover:text-amber-200"; // Color
-        
-
+  return (
+    <nav aria-label="Settings" className="flex gap-1 overflow-x-auto lg:flex-col">
+      {LINKS.map(({ href, label, icon: Icon }) => {
+        const active = pathname === href;
         return (
-          <Link href={path} className={`py-2 ${fontClass} ${textClass}`}>
-            {text}
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={`flex items-center gap-3 whitespace-nowrap rounded-btn px-3 py-2 text-sm transition-colors ${
+              active ? "bg-slate font-medium text-marble" : "text-muted hover:bg-stone hover:text-marble"
+            }`}
+          >
+            <Icon className={`h-4 w-4 ${active ? "text-bronze" : ""}`} />
+            {label}
           </Link>
         );
-      };
-
-
-
-    return (
-      <div className = "pt-10 pr-5">
-        <div className = "flex flex-col pl-20 px-2 border-r-2 border-amber-200">
-          <div className = "flex flex-col p-2"> 
-            {headerLink("/account/settings/personal-information", "Personal Information")}
-            {headerLink("/account/settings/security-privacy", "Security & Privacy")}
-            {headerLink("/account/settings/beneficiaries", "Beneficiaries")}
-            </div>
-        </div>
-      </div>
-    )
-
+      })}
+    </nav>
+  );
 }

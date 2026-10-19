@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { BellIcon } from "@heroicons/react/24/outline";
 import Search from "./components/search";
 import { timeAgo } from "./lib/format";
+import { Avatar } from "./account/accountUi";
 import "./globals.css";
 
 const NAV = [
@@ -34,17 +35,21 @@ export default function Header({ user }) {
   }
 
   useEffect(() => {
-    fetch("/api/account/notifications")
+    const load = () => fetch("/api/account/notifications")
       .then((response) => response.json())
       .then((json) => setEventList(json.data || []))
       .catch(() => {});
+    load();
+
+    // The inbox page announces reads so the bell stays in sync
+    window.addEventListener("notifications:changed", load);
 
     // Live notifications come from the compute service, which only exists in production
     // unless NEXT_PUBLIC_EVENTS_URL points somewhere else
     const eventsURL = process.env.NEXT_PUBLIC_EVENTS_URL ||
       (process.env.NODE_ENV === "production" ? "https://compute.arkhaios.io/api/events" : null);
 
-    if(!eventsURL) return;
+    if(!eventsURL) return () => window.removeEventListener("notifications:changed", load);
 
     const events = new EventSource(eventsURL, { withCredentials: true });
 
@@ -56,6 +61,7 @@ export default function Header({ user }) {
     };
 
     return () => {
+      window.removeEventListener("notifications:changed", load);
       events.close();
     }
   }, []);
@@ -140,7 +146,7 @@ export default function Header({ user }) {
 
         <div className="dropdown dropdown-end">
           <button tabIndex={0} className="ml-1 flex items-center gap-2 rounded-btn p-1 pr-2 transition-colors hover:bg-slate">
-            <img alt="" src="/avatar.png" className="h-8 w-8 rounded-full" />
+            <Avatar firstName={user.firstName} lastName={user.lastName} seed={user.accountID} size={32} />
             <span className="hidden text-sm font-medium text-marble lg:block">{user.firstName}</span>
           </button>
           <ul tabIndex={0} className="menu dropdown-content z-[110] mt-2 w-60 rounded-box border border-line bg-stone p-2 shadow-2xl">
