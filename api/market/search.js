@@ -2,46 +2,60 @@ const db = require('../../util/db');
 const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
 const { logger } = require('../../util/logger')
 
+const LIMIT = 6;
+
+// User input goes into a regex, so escape it (an unescaped "(" used to throw)
+function startsWith(text) {
+    return { $regex: "^" + text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+}
+
 module.exports = {
     route: "/api/search",
     authenticate: true,
     get: async function(req, res, user) {
         res.setHeader('Content-Type', 'application/json');
-        const query = req.query.query;
+        const raw = String(req.query.query || "").trim();
 
-        let results = [];
+        // "F:" searches funds, anything else searches stocks and crypto
+        const fundSearch = raw.toUpperCase().startsWith("F:");
+        const query = (fundSearch ? raw.substring(2) : raw).trim().slice(0, 50);
+
+        if(!query) {
+            return res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: '', data: [] });
+        }
+
         try {
             await db.connect(async (db) => {
                 try {
-                    if(query.startsWith("F:")) {
-                        results = await db.collection('FundPortfolios')
-                        .find({ "fundName": {"$regex": "(?i)^" + query.substring(2).trimStart() + ".*"}, "publiclyAvailable": true })
-                        .limit(5).toArray();
+                    let results;
 
-                        results = results.map(result => {
-                            return {
-                                symbol: result.fundSymbol,
-                                name: result.fundName,
-                                exchange: "FUNDS"
-                            }
-                        });
+                    if(fundSearch) {
+                        const funds = await db.collection('FundPortfolios')
+                            .find({ publiclyAvailable: true, $or: [{ fundName: startsWith(query) }, { fundSymbol: startsWith(query) }] })
+                            .limit(LIMIT).toArray();
 
-                        res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: '', data: results});
+                        results = funds.map((fund) => ({
+                            id: fund.fundID,
+                            symbol: fund.fundSymbol,
+                            name: fund.fundName,
+                            exchange: "FUNDS"
+                        }));
                     } else {
-                        results = await db.collection('Assets').
-                            find({ "symbol": {"$regex": "(?i)^" + query + ".*"} })
-                            .limit(5).toArray();
+                        // Symbol matches first, then name matches that aren't already listed
+                        const assets = db.collection('Assets');
+                        results = await assets.find({ symbol: startsWith(query) })
+                            .sort({ symbol: 1 }).limit(LIMIT).toArray();
 
-                        if(results.length < 5) {
-                            // Two queries worst case;
-                            // this makes it trivial to handle the sorting criteria, with more network traffic
-                            results = results.concat(await db.collection('Assets').
-                            find({ "name": {"$regex": "(?i)^" + query + ".*"} }).
-                            limit(5 - results.length).toArray());
+                        if(results.length < LIMIT) {
+                            results = results.concat(await assets
+                                .find({ name: startsWith(query), symbol: { $nin: results.map((r) => r.symbol) } })
+                                .sort({ symbol: 1 }).limit(LIMIT - results.length).toArray());
                         }
 
-                        res.status(200).json({status: RESPONSE_TYPE.SUCCESS, message: '', data: results});
+                        results = results.map(({ _id, ...asset }) => asset);
                     }
+
+                    res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: '', data: results });
                 } catch(e) {
                     logger.log({
                         level: 'error',
