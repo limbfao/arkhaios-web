@@ -1,26 +1,37 @@
-import { useState, useEffect, useReducer } from 'react';
+import { useState, useEffect, useReducer, useCallback } from "react";
 
-function reducer(state, {type, responseJSON, error}) {
-    switch (type) {
-      case 'loading':
-        return {...state, isLoading: true};
-      case 'success':
-        return {responseJSON, isLoading: false, error: null};
-      case 'error':
-        return {responseJSON: null, isLoading: false, error};
-      default:
-        throw new Error('Unkown action type');
-    }
+function reducer(state, { type, responseJSON, error }) {
+  switch (type) {
+    case "loading":
+      return { ...state, isLoading: true, error: null };
+    case "success":
+      return { responseJSON, isLoading: false, error: null };
+    case "error":
+      // Non-2xx responses keep their JSON body so callers can still read the message
+      return { responseJSON: responseJSON ?? null, isLoading: false, error };
+    case "idle":
+      return { responseJSON: null, isLoading: false, error: null };
+    default:
+      throw new Error("Unknown action type");
   }
+}
 
+// Fetches JSON from `url` whenever it changes. Pass a falsy url to skip the request.
+// Returns { isLoading, error, isError, responseJSON, reload }.
 export default function useFetch(url) {
   const [state, dispatch] = useReducer(reducer, {
     responseJSON: null,
-    isLoading: true,
+    isLoading: Boolean(url),
     error: null,
   });
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
+    if (!url) {
+      dispatch({ type: "idle" });
+      return;
+    }
     let shouldCancel = false;
 
     const callFetch = async () => {
@@ -28,8 +39,15 @@ export default function useFetch(url) {
 
       try {
         const response = await fetch(url);
-        const newResponseJSON = await response.json();
+        const text = await response.text();
+        const newResponseJSON = text ? JSON.parse(text) : null;
         if (shouldCancel) return;
+        if (!response.ok) {
+          const error = new Error(newResponseJSON?.message || `Request failed (${response.status})`);
+          error.status = response.status;
+          dispatch({ type: "error", error, responseJSON: newResponseJSON });
+          return;
+        }
         dispatch({ type: "success", responseJSON: newResponseJSON });
       } catch (newError) {
         if (shouldCancel) return;
@@ -37,9 +55,11 @@ export default function useFetch(url) {
       }
     };
     callFetch();
-    
-    return () => (shouldCancel = true);
-  }, [url]);
 
-  return state;
+    return () => {
+      shouldCancel = true;
+    };
+  }, [url, attempt]);
+
+  return { ...state, isError: Boolean(state.error), reload };
 }

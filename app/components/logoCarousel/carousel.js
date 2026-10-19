@@ -8,23 +8,16 @@ const logos = [
   "aapl",
   "tsla",
   "nflx",
-  "duol",
   "nke",
   "pton",
   "amzn",
   "bac",
   "ko",
-  "wfc",
-  "f",
   "wmt",
   "vz",
   "v",
-  "gm",
-  "axp",
   "jpm",
   "c",
-  "gs",
-  "nkla",
   "rivn",
   "nio",
   "pypl",
@@ -32,25 +25,28 @@ const logos = [
   "shop",
   "uber",
   "dbx",
-  "lpl",
   "sono",
   "vzio",
   "lcid",
-  "hyzn",
 ];
 
-// Repeat the logos array to ensure we have enough logos to cover the animation
-
+// Logos of a few of the companies whose stock can be traded on Arkhaios.
+// The list is rendered twice so the strip can loop without a gap.
 export default function Carousel() {
   return (
-    <div className={styles.logos}>
-      <div className={styles.logosSlide}>
-        {logos.map((logo, index) => (
-          <img
-            key={index}
-            src={`${logoBaseUrl}${logo}.svg`}
-            alt={`${logo} logo`}
-          />
+    <div className={styles.logos} aria-label="Examples of stocks you can trade">
+      <div className={styles.logosTrack}>
+        {[0, 1].map((copy) => (
+          <div className={styles.logosSlide} key={copy} aria-hidden={copy === 1 ? true : undefined}>
+            {logos.map((logo) => (
+              <img
+                key={logo}
+                src={`${logoBaseUrl}${logo}.svg`}
+                alt={copy === 0 ? `${logo.toUpperCase()} logo` : ""}
+                loading="lazy"
+              />
+            ))}
+          </div>
         ))}
       </div>
     </div>

@@ -6,7 +6,6 @@ async function fetchYahoo(id) {
     const baseURL = 'https://query1.finance.yahoo.com';
     const path = '/v8/finance/chart/' + id;
     const query = '?region=US&lang=en-US&interval=2m&range=1d';
-    console.log(baseURL + path + query);
     const response = await fetch(baseURL + path + query);
 
     return response;
@@ -17,17 +16,31 @@ module.exports = {
     authenticate: true,
     get: async function(req, res, user) {
         res.setHeader('Content-Type', 'application/json');
-        const symbol = req.query.id.toUpperCase();
+        if(!req.query?.id) {
+            res.status(400).json({status: RESPONSE_TYPE.FAILED, message: 'missing id'});
+            return;
+        }
+        const symbol = String(req.query.id).toUpperCase();
 
-        const quote = await fetchYahoo(symbol);
-        if(quote.status == 200) {
+        let quote = null;
+        try {
+            quote = await fetchYahoo(symbol);
+        } catch(e) {
+            quote = null;
+        }
+        if(quote?.status == 200) {
             const json = await quote.json();
-            
+            const meta = json?.chart?.result?.[0]?.meta || {};
+            const price = meta.regularMarketPrice;
+            const previousClose = meta.chartPreviousClose ?? meta.previousClose ?? null;
+
             res.status(200).json({
                 status: RESPONSE_TYPE.SUCCESS,
                 data: {
                     symbol: symbol,
-                    price: json['chart']['result']['0']['meta']['regularMarketPrice']
+                    price: price,
+                    previousClose: previousClose,
+                    changePercent: previousClose ? price / previousClose - 1 : null
                 }
             })
 
@@ -49,7 +62,7 @@ module.exports = {
                         res.status(200).json({
                             status: RESPONSE_TYPE.SUCCESS,
                             data: {
-                                symbol: asset.symbol,
+                                symbol: asset,
                                 price: assets[i].lastPrice
                             }
                         })
@@ -65,7 +78,7 @@ module.exports = {
                         status: RESPONSE_TYPE.SUCCESS,
                         data: {
                             symbol: asset.symbol,
-                            price: assets[i].lastPrice
+                            price: asset.lastPrice
                         }
                     })
                     

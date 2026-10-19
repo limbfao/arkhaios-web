@@ -15,24 +15,28 @@ module.exports = {
                 data: {}
             });
         } else if (req.body.resend == true) {
-            sendgrid.sendCode(user.email,
-                "Account Recovery", "We see you requested a new verification code!");
+            await sendgrid.sendCode(user.email,
+                "Your Verification Code", "Here is your new verification code.");
 
             res.status(200).json({
                 status: RESPONSE_TYPE.SUCCESS,
                 message: "a new verification code has been sent",
                 data: {}
             })
-        } else if(Date.now() >= user.verificationExpiry) {
+        } else if(!user.verificationExpiry || Date.now() >= user.verificationExpiry) {
             res.status(401).json({
                 status: RESPONSE_TYPE.FAILED,
                 message: "verification code has expired",
                 data: {}
             })
-        }  else {
-            if(user.verificationCode == req.body.verificationCode) {
+        } else {
+            const code = String(req.body.verificationCode || '').trim();
+            if(code.length === 6 && String(user.verificationCode) === code) {
+                // Clear the code so it can't be reused (it shares a field with password recovery)
                 await db.updateUser(user, {
-                    emailVerified: true
+                    emailVerified: true,
+                    verificationCode: null,
+                    verificationExpiry: 0
                 })
 
                 res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: '', data: {} });

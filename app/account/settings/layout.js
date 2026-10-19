@@ -1,16 +1,10 @@
-import SettingsHeader from "./settingsHeader"
+import SettingsNav from "./settingsHeader";
 
-export default function RootLayout ({ children }) {
-
-    return (
-        <div className = "grid grid-cols-3 gap-4">
-            <SettingsHeader/>
-            <div className ="col-span-2">
-            {children}
-            </div>
-            
-
-        </div>
-    )
-
+export default function SettingsLayout({ children }) {
+  return (
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[13rem_minmax(0,1fr)]">
+      <SettingsNav />
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
 }

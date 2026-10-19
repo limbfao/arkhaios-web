@@ -1,325 +1,172 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import Search from "./components/search";
-import "./globals.css";
-import "./../output.css";
 import { useEffect, useState } from "react";
+import { BellIcon } from "@heroicons/react/24/outline";
+import Search from "./components/search";
+import { timeAgo } from "./lib/format";
+import { Avatar } from "./account/accountUi";
+import "./globals.css";
+
+const NAV = [
+  { href: "/markets", label: "Markets" },
+  { href: "/friends", label: "Friends" },
+];
+
+function sameSection(href, pathname) {
+  const a = href.split("/").filter(Boolean)[0];
+  const b = pathname.split("/").filter(Boolean)[0];
+  return !!a && a === b;
+}
 
 export default function Header({ user }) {
   const pathname = usePathname();
   const [eventList, setEventList] = useState([]);
-  const [unreadNotifications, setUnread] = useState(0);
+  const unread = eventList.filter((event) => !event.read).length;
 
   async function readNotification(id) {
-    let index = -1;
-    let object = {};
-    let unread = 0;
-    for(let i = 0; i < eventList.length; ++i) {
-      if(eventList[i].id == id) {
-        index = i;
+    setEventList((list) => list.map((event) => (event.id == id ? { ...event, read: true } : event)));
 
-        object = eventList[i];
-        object.read = true;
-      } else if(!eventList[i].read) unread++;
-    }
-
-    if(index >= 0) {
-      setUnread(unread);
-
-      setEventList((eventList) => [
-        ...eventList.slice(0, index),
-        object,
-        ...eventList.slice(index + 1)
-      ]);
-    
-      await fetch("/api/account/read-notification", {
-        method: "POST",
-        mode: "cors",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: id })
-      });
-    }
+    await fetch("/api/account/read-notification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id }),
+    });
   }
 
   useEffect(() => {
+    const load = () => fetch("/api/account/notifications")
+      .then((response) => response.json())
+      .then((json) => setEventList(json.data || []))
+      .catch(() => {});
+    load();
 
-    async function fetchData() {
-      await fetch("/api/account/notifications", {
-        method: "GET",
-        mode: "cors",
-        headers: {
-          "Content-Type": "application/json",
-        }
-      }).then(async response => {
-        let json = await response.json();
-        let unread = 0;
-  
-        for(let i = 0; i < json.data.length; ++i) {
-          if(!json.data[i]?.read) unread++;
-        }
-  
-        setUnread(unread);
-        setEventList(json.data);
-      });
-    }
+    // The inbox page announces reads so the bell stays in sync
+    window.addEventListener("notifications:changed", load);
 
-    fetchData();
+    // Live notifications come from the compute service, which only exists in production
+    // unless NEXT_PUBLIC_EVENTS_URL points somewhere else
+    const eventsURL = process.env.NEXT_PUBLIC_EVENTS_URL ||
+      (process.env.NODE_ENV === "production" ? "https://compute.arkhaios.io/api/events" : null);
 
-    const events = new EventSource("https://compute.arkhaios.io/api/events", { withCredentials: true });
+    if(!eventsURL) return () => window.removeEventListener("notifications:changed", load);
+
+    const events = new EventSource(eventsURL, { withCredentials: true });
 
     events.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-
-        setUnread((unread) => unread + 1);
-        setEventList((eventList) => [message, ...eventList])
+        setEventList((eventList) => [message, ...eventList]);
       } catch(e) {}
     };
 
     return () => {
+      window.removeEventListener("notifications:changed", load);
       events.close();
     }
   }, []);
-  // const socket = new WebSocket("ws://localhost:3000/ws-demo");
-
-  // socket.addEventListener("open", (event) => {
-  //   console.log("Opened socket");
-  //   socket.send("Hello");
-  // });
-
-  // let [theme, setTheme] = useState("dark");
 
   async function logout() {
-    await fetch("/api/account/logout", {
-      method: "POST",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
-    })
-      .then(async (response) => {
-        if (response.status === 200) {
-          window.location.href = "/";
-        }
-      })
-      .catch((error) => {
-        console.log(error);
+    try {
+      const response = await fetch("/api/account/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
-  }
-
-  /**
-   *
-   * @param {*} str Name
-   * @returns Returns a string whose first letter is uppercase and the rest lower-case.
-   */
-  function capitalizeFirstLetter(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-  }
-
-  function haveSameInitialDomainPath(path1, path2) {
-    // Split the paths by '/' to get the individual components
-    const components1 = path1.split("/").filter(Boolean); // filter(Boolean) removes any empty strings due to leading '/'
-    const components2 = path2.split("/").filter(Boolean);
-
-    // Check if there is at least one component to compare
-    if (components1.length === 0 || components2.length === 0) {
-      return false; // One of the paths is the root path, so they do not match
+      if (response.status === 200) window.location.href = "/";
+    } catch (error) {
+      console.log(error);
     }
-
-    // Compare the first component of both paths
-    return components1[0] === components2[0];
   }
 
-  const dropDownLink = (path, text) => {
-    const isActive = pathname === path;
+  const navClass = (href) =>
+    `rounded-btn px-3 py-2 text-sm font-medium transition-colors ${
+      sameSection(href, pathname) ? "text-marble bg-slate" : "text-muted hover:text-marble"
+    }`;
 
-    var fontClass = "text-sm text-nowrap"; // Boldneess
-    const textClass = isActive
-      ? "text-yellow-200"
-      : "hover:text-yellow-200"; // Color
+  const unreadEvents = eventList.filter((event) => !event.read).slice(0, 5);
 
-    return (
-      <Link href={path} className={`${fontClass} ${textClass} no-underline`}>
-        {text}
-      </Link>
-    );
-  };
-
-  const dropDownHeader = (path, text) => {
-    const isActive = haveSameInitialDomainPath(path, pathname);
-
-    var fontClass = "text-sm font-bold interFont text-nowrap"; // Boldneess
-    const textClass = isActive
-      ? "text-yellow-200"
-      : "text-white hover:text-yellow-200"; // Color
-
-    return (
-      <Link href={path} className={`${fontClass} ${textClass} no-underline`}>
-        {text}
-      </Link>
-    );
-  };
-
-  const headerLink = (path, text) => {
-    const isActive = haveSameInitialDomainPath(path, pathname);
-
-    var fontClass = "text-sm font-extrabold interFont"; // Boldneess
-    const textClass = isActive
-      ? "text-yellow-200"
-      : "text-[#7c7c6f] hover:text-yellow-100 hover:shadow-lg shadow-yellow-100"; // Color
-
-    if (text == "ARKHAIOS") {
-      fontClass = "font-black text-lg josefinFont";
-    }
-
-    return (
-      <Link
-        href={path}
-        className={`w-20 ${textClass} ${fontClass} no-underline px-5`}
-      >
-        {text}
-      </Link>
-    );
-  };
-
-  /*
-  
-  */
   return (
-  
-      <div className="flex justify-items-center bg-color-black">
-        {/*  Left Side  */}
-        <div className="m-2 flex grow items-center pr-10">
-          {<img src="/noBackgroundArkhaiosLogo.png" width={50} height={70} />}
-          <div className="josefinFont">{headerLink("/home", "ARKHAIOS")}</div>
-        </div>
+    <div className="flex h-16 items-center gap-6 px-4">
+      <Link href="/home" className="flex shrink-0 items-center gap-2.5" aria-label="Arkhaios home">
+        <img src="/logo-mark.png" alt="" width={34} height={34} />
+        <span className="font-display text-xl tracking-wide text-marble">Arkhaios</span>
+      </Link>
 
-        {/*  Center  */}
-        <div className="m-2 flex grow items-center pr-5">
-          <Search />
-        </div>
-        {/*  Right Side  */}
-
-        <div className="flex px-10 pr-10">
-          <div className="flex px-5 justify-items-center items-center mt-5 mb-6 dark:text-slate-300">
-            <label className="px-2 text-xs">
-              {headerLink("/markets", "MARKETS")}
-            </label>
-            <label className="px-2 text-xs">
-              {headerLink("/friends", "FRIENDS")}
-            </label>
-
-            <button className="flex justify-center">
-              <div className="dropdown dropdown-end dropdown-hover text-md">
-                <div tabIndex={0} role="button">
-                  <div className="flex items-center">
-                    {headerLink("/inbox", "INBOX")}
-                    {
-                      unreadNotifications <= 0 ? <></> : <div className="bg-rose-500 hover:bg-rose-500 rounded-full w-3 h-3 p-0"></div>
-                    }
-                  </div>
-                </div>
-
-                <ul
-                  tabIndex={0}
-                  className="dropdown-content z-[50] menu p-2 shadow bg-base-100 rounded-box w-52"
-                >
-                  {
-                    eventList.length > 0 ?
-                    (
-                      eventList.filter(event => {
-                        return event.read == false;
-                      }).slice(0, 5).map(event => {
-                        return (
-                          <li className="flex flex-row items-center w-full" onClick={() => readNotification(event.id)}>
-                            <p className="w-full">{event.message}
-                              {event.read ? <></> : <div className="bg-rose-500 hover:bg-rose-500 rounded-full w-3 h-3 p-0 absolute right-px mr-1"></div>}</p>
-                          </li>
-                        );
-                      })
-                    )
-                      :
-                      <li className="flex flex-row items-center">
-                        <p className="w-full">No new messages</p>
-                      </li>
-                  }
-
-                  {
-                    eventList.length > 5 ? 
-                    
-                    <li className="flex flex-row items-center">
-                    <Link href={"/inbox"} className="bold text-center w-full">Read all notifications</Link>
-                    </li>
-                    : <></>
-                  }
-                </ul>
-              </div>
-
-            </button>
-          </div>
-        </div>
-
-        {/*  Right Side  */}
-
-        <div className="flex items-center pr-10">
-          <div className="pl-2 text-center">
-            <div className="dropdown dropdown-end dropdown-hover text-md">
-              <div tabIndex={0} role="button">
-                {headerLink("/account/profile", "ACCOUNT")}
-              </div>
-
-              <ul
-                tabIndex={0}
-                className="dropdown-content z-[50] menu p-2 shadow bg-base-100 rounded-box w-52"
-              >
-                <li>
-                  <div className="flex" title="View profile">
-                    <img
-                      alt=""
-                      src="/avatar.png"
-                      className="w-8 h-8 rounded-full"
-                    />
-
-                    <div className="flex flex-col">
-                      <h3 className="font-bold">
-                        {dropDownHeader(
-                          "/account/profile",
-                          user.firstName.toUpperCase() +
-                          " " +
-                          user.lastName.toUpperCase()
-                        )}
-                      </h3>
-                      <span className="text-xs text-accent">{user.email}</span>
-                    </div>
-                  </div>
-                </li>
-                <div className="divider my-0"></div>
-                <li>{dropDownLink("/account/investing", "Investing")}</li>
-                <li>{dropDownLink("/account/transfers", "Transfers")}</li>
-                <li>
-                  {dropDownLink(
-                    "/account/reports-statements",
-                    "Reports & Statements"
-                  )}
-                </li>
-                <div className="divider my-0"></div>
-                <li>{dropDownLink("/account/settings/personal-information", "Settings")}</li>
-                <li>{dropDownLink("/account/help", "Help")}</li>
-                <div className="divider my-0"></div>
-                <li>
-                  <button
-                    onClick={logout}
-                    className="place-content-center font-bold"
-                  >
-                    Sign Out
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-1 justify-center">
+        <Search />
       </div>
-    
+
+      <nav className="flex items-center gap-1">
+        {NAV.map((item) => (
+          <Link key={item.href} href={item.href} className={navClass(item.href)}>
+            {item.label}
+          </Link>
+        ))}
+
+        <div className="dropdown dropdown-end">
+          <button
+            tabIndex={0}
+            className="btn btn-ghost btn-sm btn-square relative text-muted hover:text-marble"
+            aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+          >
+            <BellIcon className="h-5 w-5" />
+            {unread > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-bronze px-1 text-[10px] font-semibold text-basalt">
+                {unread}
+              </span>
+            ) : null}
+          </button>
+          <div tabIndex={0} className="dropdown-content z-[110] mt-2 w-80 overflow-hidden rounded-box border border-line bg-stone shadow-2xl">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <span className="text-sm font-semibold">Notifications</span>
+              <Link href="/inbox" className="text-xs text-bronze hover:text-bronze-light">View all</Link>
+            </div>
+            {unreadEvents.length > 0 ? (
+              <ul className="max-h-80 overflow-y-auto">
+                {unreadEvents.map((event) => (
+                  <li key={event.id}>
+                    <button
+                      onClick={() => readNotification(event.id)}
+                      className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-slate"
+                    >
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-bronze" />
+                      <span className="min-w-0">
+                        <span className="block text-sm text-marble">{event.message}</span>
+                        <span className="mt-0.5 block text-xs text-muted">{timeAgo(event.time)}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-4 py-6 text-center text-sm text-muted">You're all caught up.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="dropdown dropdown-end">
+          <button tabIndex={0} className="ml-1 flex items-center gap-2 rounded-btn p-1 pr-2 transition-colors hover:bg-slate">
+            <Avatar firstName={user.firstName} lastName={user.lastName} seed={user.accountID} size={32} />
+            <span className="hidden text-sm font-medium text-marble lg:block">{user.firstName}</span>
+          </button>
+          <ul tabIndex={0} className="menu dropdown-content z-[110] mt-2 w-60 rounded-box border border-line bg-stone p-2 shadow-2xl">
+            <li className="pointer-events-none mb-1">
+              <div className="flex flex-col items-start gap-0">
+                <span className="text-sm font-semibold text-marble">{user.firstName} {user.lastName}</span>
+                <span className="text-xs text-muted">{user.email}</span>
+              </div>
+            </li>
+            <li><Link href="/account/profile">Profile</Link></li>
+            <li><Link href="/account/investing">Investing</Link></li>
+            <li><Link href="/account/transfers">Transfers</Link></li>
+            <li><Link href="/account/reports-statements">Reports & statements</Link></li>
+            <li><Link href="/account/settings/personal-information">Settings</Link></li>
+            <li><Link href="/account/help">Help</Link></li>
+            <div className="my-1 border-t border-line" />
+            <li><button onClick={logout}>Sign out</button></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
   );
 }

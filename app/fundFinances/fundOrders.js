@@ -1,92 +1,139 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// The fund's order history with open/filled/all filters and cancel for open orders
 
-export default function FundOrders({ fundID }) {
-  const [orders, setOrders] = useState([]);
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import useFetch from "../hooks/useFetch";
+import { AssetLogo, EmptyState, ErrorState, SkeletonRows } from "../components/ui";
+import { formatCurrency, formatDate, formatNumber } from "../lib/format";
+import { postJSON, useToast } from "../funds-home/fundKit";
 
-  useEffect(() => {
-    async function getOrders() {
-      try {
-        const response = await fetch("/api/orders?fund=" + fundID, {
-          method: "GET",
-          mode: "cors",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
+const OPEN = ["new", "accepted", "pending_new", "partially_filled", "held"];
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "open", label: "Open" },
+  { key: "filled", label: "Filled" },
+];
 
-        const data = await response.json();
-        setOrders(data.data);
-      } catch (error) {
-        console.error(error);
-      }
+function statusLabel(status) {
+  if (OPEN.includes(status)) return status === "partially_filled" ? "Partially filled" : "Open";
+  const s = String(status || "").replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function statusTone(status) {
+  if (status === "filled") return "text-gain";
+  if (OPEN.includes(status)) return "text-bronze";
+  return "text-muted";
+}
+
+export default function FundOrders({ fundID, onChange }) {
+  const [filter, setFilter] = useState("all");
+  const { responseJSON, isLoading, error, reload } = useFetch(`/api/orders?fund=${encodeURIComponent(fundID)}`);
+  const [toast, notify] = useToast();
+  const [canceling, setCanceling] = useState(null);
+
+  async function cancel(order) {
+    setCanceling(order.id);
+    const result = await postJSON("/api/fund/cancel-order", { fundID, order: order.id });
+    setCanceling(null);
+    if (result.ok) {
+      notify(`Canceled the ${order.side} order for ${order.symbol}. Reserved cash was returned.`);
+      reload();
+      onChange?.();
+    } else {
+      notify(result.message || "The order couldn't be canceled.", "error");
     }
-
-    getOrders();
-  }, []);
+  }
+  const orders = useMemo(() => {
+    const list = responseJSON?.data || [];
+    if (filter === "open") return list.filter((o) => OPEN.includes(o.status));
+    if (filter === "filled") return list.filter((o) => o.status === "filled");
+    return list;
+  }, [responseJSON, filter]);
 
   return (
-    <div className="rounded-sm max-w-5xl mx-auto backdrop-blur-xl bg-[#121212]">
-      <div className="relative rounded-sm bg-[#121212]">
-        <div className="bg-[#121212] rounded-sm">
-          <div className="border-b border-cyan-400 px-2">
-            <div className="grid grid-cols-2 px-1 py-2">
-              <p className="text-amber-100 font-light">Order History</p>
-              <button className="text-amber-100 justify-self-end px-2 text-sm font-extralight">
-                Filter
-              </button>
-            </div>
-          </div>
-          <div className="overflow-auto ">
-            {orders?.map((order) => (
-              <>
-                <div
-                  key={order.asset_id}
-                  className="grid grid-cols-3 bg-[#121212] space-y-2 px-1"
-                >
-                  <div className="pt-3 pl-1">
-                    <div className="place-self-center text-sm text-white">
-                      {order.symbol}
-                    </div>
-                    <div className="text-xs text-slate-300 font-extralight">
-                      {order.asset_class}
-                    </div>
-                  </div>
-
-                  <div className="px-2 pl-2 pt-1 ">
-                    <p className="text-right font-sm text-white">
-                      {order.order_type == "market"
-                        ? order.filled_avg_price
-                          ? `$${order.filled_avg_price}`
-                          : "Market Price"
-                        : `$${order.limit_price}`}
-                    </p>
-
-                    <p className="text-right text-xs text-slate-300">
-                      Filled: {order.filled_qty}/{order.qty || order.notional}{" "}
-                      {order.qty ? "shares" : "dollars"}
-                    </p>
-
-                    <p className="text-right text-xs text-slate-300">
-                      {order.order_type == "market" ? "Market" : "Limit"} order
-                    </p>
-                  </div>
-
-                  <div className="px-2 pl-2 pt-1">
-                    <p className="text-thin text-xs text-slate-300 text-right">
-                      Status: {order.status}
-                    </p>
-                    <p className="text-thin text-xs text-slate-300 text-right">
-                      {new Date(order.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </>
-            ))}
-          </div>
+    <section className="panel" aria-label="Fund orders">
+      <div className="panel-header">
+        <h2 className="panel-title">Orders</h2>
+        <div role="tablist" aria-label="Filter orders" className="inline-flex rounded-btn border border-line bg-basalt p-0.5">
+          {FILTERS.map((f) => (
+            <button key={f.key} type="button" role="tab" aria-selected={filter === f.key}
+              onClick={() => setFilter(f.key)}
+              className={`rounded-[0.4rem] px-2.5 py-1 text-xs font-medium ${filter === f.key ? "bg-slate text-bronze" : "text-muted hover:text-marble"}`}>
+              {f.label}
+            </button>
+          ))}
         </div>
       </div>
-    </div>
+      {isLoading ? (
+        <div className="p-5"><SkeletonRows rows={4} /></div>
+      ) : error ? (
+        <ErrorState message="Orders couldn't be loaded." onRetry={reload} />
+      ) : orders.length === 0 ? (
+        <EmptyState
+          title={filter === "all" ? "No orders yet" : `No ${filter} orders`}
+          description="Orders you place on behalf of the fund appear here."
+        />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs text-muted">
+                <th scope="col" className="px-5 py-2.5 font-medium">Symbol</th>
+                <th scope="col" className="px-3 py-2.5 font-medium">Side</th>
+                <th scope="col" className="px-3 py-2.5 text-right font-medium">Shares</th>
+                <th scope="col" className="px-3 py-2.5 text-right font-medium">Limit price</th>
+                <th scope="col" className="px-3 py-2.5 text-right font-medium">Fill price</th>
+                <th scope="col" className="px-3 py-2.5 text-right font-medium">Total</th>
+                <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
+                <th scope="col" className="px-3 py-2.5 text-right font-medium">Placed</th>
+                <th scope="col" className="px-5 py-2.5"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((o) => {
+                const qty = parseFloat(o.qty) || 0;
+                const filledQty = parseFloat(o.filled_qty) || 0;
+                const fill = parseFloat(o.filled_avg_price);
+                const limit = parseFloat(o.limit_price);
+                const total = o.status === "filled" ? filledQty * fill : qty * (limit || 0);
+                return (
+                  <tr key={o.id} className="border-b border-line/60 last:border-b-0 hover:bg-slate/40">
+                    <td className="px-5 py-3">
+                      <Link href={`/fundMarkets/stocks/${encodeURIComponent(o.symbol)}`} className="flex items-center gap-3 hover:text-bronze">
+                        <AssetLogo symbol={o.symbol} size={26} />
+                        <span className="font-medium text-marble">{o.symbol}</span>
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 capitalize text-marble">{o.side} <span className="text-muted">{o.order_type || o.type}</span></td>
+                    <td className="px-3 py-3 text-right text-marble">
+                      {formatNumber(qty)}
+                      {OPEN.includes(o.status) && filledQty ? <span className="text-xs text-muted"> ({formatNumber(filledQty)} filled)</span> : null}
+                    </td>
+                    <td className="px-3 py-3 text-right text-muted">{formatCurrency(limit)}</td>
+                    <td className="px-3 py-3 text-right text-marble">{formatCurrency(fill)}</td>
+                    <td className="px-3 py-3 text-right text-marble">{formatCurrency(total)}</td>
+                    <td className={`px-3 py-3 ${statusTone(o.status)}`}>{statusLabel(o.status)}</td>
+                    <td className="px-3 py-3 text-right text-muted">{formatDate(o.created_at)}</td>
+                    <td className="px-5 py-3 text-right">
+                      {OPEN.includes(o.status) ? (
+                        <button type="button" className="btn btn-ghost btn-xs border border-line" disabled={canceling === o.id}
+                          onClick={() => cancel(o)}>
+                          {canceling === o.id ? <span className="loading loading-spinner loading-xs" /> : null}
+                          Cancel
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {toast}
+    </section>
   );
 }

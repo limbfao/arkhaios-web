@@ -25,7 +25,6 @@ module.exports = {
 
         const symbol = req.query.symbol;
 
-        console.log("Company Financials API Hit");
 
         if (!symbol) {
             return res.status(400).send({
@@ -38,7 +37,6 @@ module.exports = {
 
         try {
             const responseJSON = await getCompanyFinancials(symbol);
-            console.log("Company Financials API Response:", responseJSON);
 
             if (responseJSON && Object.keys(responseJSON).length > 0) {
                 res.status(200).send({
@@ -48,7 +46,7 @@ module.exports = {
                 });
             } else {
                 // Response JSON is null or empty
-                res.status(204).send({
+                res.status(200).send({
                     status: RESPONSE_TYPE.FAILED,
                     message: 'No company financials available.',
                     data: []

@@ -1,222 +1,153 @@
 "use client";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
-import "../components/components.css";
-import { useState, useEffect, useRef } from "react";
-import { RESPONSE_TYPE } from "../../api/response_type";
-import useFetch from "../hooks/useFetch";
-import { every } from "lodash";
 
-export default function ModifyFriends() {
-  const [friendRequestSent, setFriendRequestSent] = useState(false);
-  const [friendRequestError, setFriendRequestError] = useState(false);
+import { useState } from "react";
+import { UserPlusIcon } from "@heroicons/react/24/outline";
+import { Avatar, Spinner, fetchJSON, fullName } from "../account/accountUi";
+import { Skeleton } from "../components/ui";
 
-  const [friendsInfo, setFriendsInfo] = useState({
-    receivedRequests: [],
-    sentRequests: [],
-    friends: [],
-    blocked: [],
-  });
+const ADD_ERRORS = {
+  "user does not exist": "No one has that username. Usernames look like Bold-Amber-Falcon-417.",
+  "user already befriended": "You're already friends.",
+  "cannot add self": "That's your own username.",
+  "cannot add a blocked user": "You can't add this person.",
+};
 
-  const { error, isLoading, responseJSON } = useFetch("/api/friends/get-friends");
-  // Changed: Added ref for the input element
-  const addFriendInputRef = useRef(null);
+function PersonRow({ person, children }) {
+  return (
+    <li className="flex items-center gap-3 py-2.5">
+      <Avatar firstName={person.firstName} lastName={person.lastName} seed={person.id} size={36} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-marble">{fullName(person)}</p>
+        <p className="truncate text-xs text-muted">@{person.username}</p>
+      </div>
+      <div className="flex shrink-0 gap-1.5">{children}</div>
+    </li>
+  );
+}
 
-  // Changed: Refactored to a reusable function for fetching friend data
-  const fetchFriendsData = async () => {
+function Section({ title, count, children }) {
+  return (
+    <div className="border-t border-line px-5 py-4 md:border-t-0 xl:border-t">
+      <h3 className="flex items-center gap-2 text-xs font-medium text-muted">
+        {title}
+        {count ? <span className="rounded-full bg-slate px-1.5 text-[11px] text-marble tabular">{count}</span> : null}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+// Right column: add friends and handle pending requests
+export default function ModifyFriends({ friendsInfo, loading, onChanged }) {
+  const [username, setUsername] = useState("");
+  const [feedback, setFeedback] = useState(null); // { tone, text }
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(null); // id of the request being handled
+
+  async function addFriend(e) {
+    e.preventDefault();
+    const name = username.trim();
+    if (!name) return;
+    setAdding(true); setFeedback(null);
     try {
-      const response = await fetch("/api/friends/get-friends");
-      const data = await response.json();
-      if (data && data.status === RESPONSE_TYPE.SUCCESS) {
-        setFriendsInfo(data.data);
-      }
+      await fetchJSON("/api/friends/add", { method: "POST", body: { username: name } });
+      setFeedback({ tone: "gain", text: `Friend request sent to @${name}.` });
+      setUsername("");
+      onChanged();
+    } catch (err) {
+      setFeedback({ tone: "loss", text: ADD_ERRORS[err.message] || "The request couldn't be sent. Try again." });
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function act(url, body, key) {
+    setBusy(key);
+    try {
+      await fetchJSON(url, { method: "POST", body });
+      await onChanged();
     } catch (e) {
-      console.error("Failed to fetch friends data:", e);
-    }
-  };
-
-  // Changed: Call fetchFriendsData on component mount and after each friend request action
-  useEffect(() => {
-    fetchFriendsData();
-  }, []);
-
-  useEffect(() => {
-    if (responseJSON) {
-      console.log("Friends set!!");
-      setFriendsInfo(responseJSON.data);
-    }
-  }, [isLoading]);
-
-  async function addFriend(event) {
-    event.preventDefault();
-
-    fetch("/api/friends/add", {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username: document.getElementById("addFriend").value,
-      }),
-    })
-      .then((response) => response.json())
-      .then((response) => {
-        if (response.status == RESPONSE_TYPE.SUCCESS) {
-          setFriendRequestSent(true);
-
-          addFriendInputRef.current.value = ""; // Changed: Clear input field after successful request
-        fetchFriendsData(); // Changed: Refetch friends data to update the UI
-        } else if (response.status == RESPONSE_TYPE.FAILED) {
-          setFriendRequestError(true);
-        }
-      });
-  }
-
-  async function handleFriendRequest(id, action) {
-    try {
-      const response = await fetch("/api/friends/respond", {
-        method: "POST",
-        mode: "cors",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id,
-          action,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.status === RESPONSE_TYPE.SUCCESS) {
-        fetchFriendsData();
-      } else if (data.status === RESPONSE_TYPE.FAILED) {
-        console.error("Failed to handle friend request.");
-        // Handle error, e.g., show an error message to the user
-      }
-    } catch (error) {
-      console.error("Error handling friend request:", error);
-      // Handle error, e.g., show an error message to the user
+      setFeedback({ tone: "loss", text: "That didn't work. Try again." });
+    } finally {
+      setBusy(null);
     }
   }
 
-  const RequestSentNotification = () => {
-    return (
-      <div className="toast toast-center rounded-sm pb-20">
-        <div className="alert alert-success">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="stroke-current shrink-0 h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span>Friend Request Sent.</span>
-        </div>
-      </div>
-    );
-  };
-
-  const ErrorNotification = () => {
-    return (
-      <div className="toast toast-center rounded-sm pb-20 w-1/5">
-        <div className="alert alert-error">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="stroke-current shrink-0 h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span>Username does not exist.</span>
-        </div>
-      </div>
-    );
-  };
-
-  useEffect(() => {
-    let timer;
-    if (friendRequestSent) {
-      timer = setTimeout(() => setFriendRequestSent(false), 5000);
-    }
-    // Cleanup function
-    return () => clearTimeout(timer);
-  }, [friendRequestSent]);
-
-  useEffect(() => {
-    let timer;
-    if (friendRequestError) {
-      timer = setTimeout(() => setFriendRequestError(false), 5000);
-    }
-    // Cleanup function
-    return () => clearTimeout(timer);
-  }, [friendRequestError]);
+  const { receivedRequests, sentRequests } = friendsInfo;
 
   return (
-    <>
-      <div className="flex flex-col items-center justify-items-end w-1/5">
-        <p className="font-bold text-lg text-nowrap pb-10 ">Manage Friends</p>
-
-        {/* <h3 className="font-thin py-1">Add Friends</h3> */}
-        <div className="flex flex-col items-center w-64">
-          <input
-            type="search"
-            id="addFriend"
-            ref={addFriendInputRef}
-            className="text-white addFriendInput interFont text-sm hover:border-white pb-5 w-1/2 py-1"
-            placeholder="Enter username..."
-            required
-          />
-
-          <button
-            onClick={addFriend}
-            className="btn animate w-1/2 block bg-amber-100 hover:bg-amber-200 rounded-full py-1 text-black"
-          >
-            Add
-          </button>
-        </div>
-        <div>
-          <p className="py-10 font-bold text-lg">Incoming Requests</p>
-          {friendsInfo.receivedRequests.map((friend) => (
-            <div key={friend.id} className="grid grid-cols-2">
-              <p className="">{friend.firstName + " " + friend.lastName}</p>
-              <div className="grid grid-cols-2  ">
-                <CheckCircleIcon
-                  onClick={() => handleFriendRequest(friend.id, "accept")}
-                  className="w-5 h-5 cursor-pointer"
-                />
-                <XCircleIcon
-                  onClick={() => handleFriendRequest(friend.id, "reject")}
-                  className="w-5 h-5 cursor-pointer"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-        <div>
-          <p className="pt-10 pb-5 font-bold text-lg">Sent Requests</p>
-          {friendsInfo.sentRequests.map((friend) => (
-            <div className="font-light py-1" key={friend.id}>
-              {friend.username}
-            </div>
-          ))}
-        </div>
-
-        {friendRequestSent ? <RequestSentNotification /> : <></>}
-        {friendRequestError ? <ErrorNotification /> : <></>}
+    <aside className="panel grid shrink-0 grid-cols-1 divide-line self-stretch md:grid-cols-3 md:divide-x xl:w-80 xl:grid-cols-1 xl:divide-x-0 xl:self-start"
+      aria-label="Manage friends">
+      <div className="px-5 py-4">
+        <h2 className="panel-title">Add a friend</h2>
+        <form onSubmit={addFriend} className="mt-3">
+          <label htmlFor="addFriend" className="field-label">Username</label>
+          <div className="flex gap-2">
+            <input
+              id="addFriend"
+              className="field"
+              placeholder="Their username"
+              autoComplete="off"
+              spellCheck={false}
+              value={username}
+              onChange={(e) => { setUsername(e.target.value); setFeedback(null); }}
+            />
+            <button type="submit" className="btn btn-primary shrink-0" disabled={!username.trim() || adding} aria-label="Send friend request">
+              {adding ? <Spinner /> : <UserPlusIcon className="h-4 w-4" />}
+              <span>Add</span>
+            </button>
+          </div>
+          <p className={`mt-2 min-h-[1rem] text-xs ${feedback?.tone === "loss" ? "text-loss" : feedback ? "text-gain" : "text-muted"}`}
+            role="status">
+            {feedback?.text || "Ask friends for their username to send a request."}
+          </p>
+        </form>
       </div>
-    </>
+
+      <Section title="Requests for you" count={receivedRequests.length}>
+        {loading ? (
+          <Skeleton className="mt-3 h-9 w-full" />
+        ) : receivedRequests.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">No pending requests.</p>
+        ) : (
+          <ul className="mt-1">
+            {receivedRequests.map((person) => (
+              <PersonRow key={person.id} person={person}>
+                <button className="btn btn-primary btn-xs" disabled={busy === person.id}
+                  onClick={() => act("/api/friends/respond", { id: person.id, action: "accept" }, person.id)}
+                  aria-label={`Accept friend request from ${fullName(person)}`}>
+                  {busy === person.id ? <Spinner className="h-3 w-3" /> : null} Accept
+                </button>
+                <button className="btn btn-ghost btn-xs border border-line text-muted" disabled={busy === person.id}
+                  onClick={() => act("/api/friends/respond", { id: person.id, action: "reject" }, person.id)}
+                  aria-label={`Decline friend request from ${fullName(person)}`}>
+                  Decline
+                </button>
+              </PersonRow>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Sent requests" count={sentRequests.length}>
+        {loading ? (
+          <Skeleton className="mt-3 h-9 w-full" />
+        ) : sentRequests.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">Requests you send will wait here until they're accepted.</p>
+        ) : (
+          <ul className="mt-1">
+            {sentRequests.map((person) => (
+              <PersonRow key={person.id} person={person}>
+                <button className="btn btn-ghost btn-xs border border-line text-muted" disabled={busy === person.id}
+                  onClick={() => act("/api/friends/cancel", { id: person.id }, person.id)}
+                  aria-label={`Cancel friend request to ${fullName(person)}`}>
+                  {busy === person.id ? <Spinner className="h-3 w-3" /> : null} Cancel
+                </button>
+              </PersonRow>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </aside>
   );
 }

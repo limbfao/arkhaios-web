@@ -1,41 +1,38 @@
-export default function Final({creationStatus}) {
+import { CheckCircleIcon, ExclamationCircleIcon } from "@heroicons/react/24/outline";
+import { Spinner } from "../../../../accountUi";
+
+export default function Final({ creationStatus, onDone, onBack }) {
+  if (!creationStatus) {
     return (
-      <div className="container md:mt-10">
-        <div className="flex flex-col items-center">
-          <div className="wrapper">
-            <svg
-              className="checkmark"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 52 52"
-            >
-              <circle
-                className="checkmark__circle"
-                cx="26"
-                cy="26"
-                r="25"
-                fill="none"
-              />
-              <path
-                className="checkmark__check"
-                fill="none"
-                d="M14.1 27.2l7.1 7.2 16.7-16.8"
-              />
-            </svg>
-          </div>
-  
-          <div className="mt-3 text-xl font-semibold uppercase text-green-500">
-            {creationStatus.status == "success" ? "Congratulations!" : (creationStatus.status != "" ? "Oops!" : "")}
-          </div>
-          <div className="text-lg font-semibold text-white">
-            {creationStatus.status == "success" ? "Your Account has been sent to be reviewed!"
-            : creationStatus.data.message}
-          </div>
-          <a className="mt-10" href="/home">
-            <button className="h-10 px-5 text-green-500 transition-colors duration-150 border border-gray-300 rounded-lg focus:shadow-outline hover:bg-green-500 hover:text-green-100">
-              Close
-            </button>
-          </a>
-        </div>
+      <div className="flex flex-col items-center py-10 text-center">
+        <Spinner className="h-8 w-8 text-bronze" />
+        <p className="mt-4 text-sm text-muted">Submitting your application…</p>
       </div>
     );
   }
+
+  const ok = creationStatus.status === "success";
+  const Icon = ok ? CheckCircleIcon : ExclamationCircleIcon;
+  return (
+    <div className="flex flex-col items-center py-8 text-center">
+      <Icon className={`h-12 w-12 ${ok ? "text-gain" : "text-loss"}`} />
+      <h3 className="mt-4 text-lg font-semibold text-marble">
+        {ok ? "Application submitted" : "We couldn't submit your application"}
+      </h3>
+      <p className="mt-1 max-w-sm text-sm text-muted">
+        {ok
+          ? "Your identity is verified and your brokerage account is being opened. You can link a bank and deposit now."
+          : creationStatus.message && creationStatus.message !== "error"
+            ? creationStatus.message
+            : "Check your details and try again."}
+      </p>
+      <div className="mt-6 flex gap-2">
+        {ok ? (
+          <button className="btn btn-primary btn-sm" onClick={onDone}>Done</button>
+        ) : (
+          <button className="btn btn-ghost btn-sm border border-line" onClick={onBack}>Review details</button>
+        )}
+      </div>
+    </div>
+  );
+}

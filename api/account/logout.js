@@ -1,6 +1,7 @@
 const db = require('../../util/db');
 const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
 const { logger } = require('../../util/logger')
+const { sessionCookieOptions } = require('../../util/cookies')
 
 module.exports = {
     route: "/api/account/logout",
@@ -19,10 +20,8 @@ module.exports = {
                 await db.redis_del(key)
             }
 
-            const hostname = req.hostname;
-
-            res.clearCookie('email', { domain: hostname, secure: true, sameSite: 'none' });
-            res.clearCookie('session', { domain: hostname, secure: true, sameSite: 'none' });
+            res.clearCookie('email', sessionCookieOptions(req));
+            res.clearCookie('session', sessionCookieOptions(req));
 
             res.status(200).json({
                 status: RESPONSE_TYPE.SUCCESS,

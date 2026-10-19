@@ -1,42 +1,21 @@
-const db = require('../../util/db.js');
 const { logger } = require('../../util/logger')
 const { RESPONSE_TYPE, SERVER_ERROR } = require('../response_type');
+const { withDb, isManager } = require('./lib.js');
 
+// Cash available for a fund's portfolio managers to trade with
 module.exports = {
     route: "/api/fund/balance",
     kyc: true,
     get: async function(req, res, user) {
-        const fundID = req.query.fund;
-        let fundAuthorized = false;
-        let fund = null;
-
-        if(fundID) {
-            try {
-                await db.connect(async (db) => {
-                    fund = await db.collection('FundPortfolios').findOne({"fundID": fundID});
-                    if(fund) {
-                        if(fund.portfolioManagers.includes(user.accountID)) {
-                            fundAuthorized = true;
-                        } else {
-                            res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: response});
-                        }
-                    } else {
-                        res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: response});
-                    }
-                });
-            } catch(e) {
-                logger.log({
-                    level: 'error',
-                    message: e
-                })
-
-                return SERVER_ERROR(res);
+        try {
+            const fund = await withDb((db) => db.collection('FundPortfolios').findOne({ fundID: req.query.fund }));
+            if(!fund || !isManager(fund, user)) {
+                return res.status(401).json({ status: RESPONSE_TYPE.FAILED, message: "unauthorized", data: {} });
             }
-            
-            if(fund && fundAuthorized) {
-                return res.status(200).json({ status: RESPONSE_TYPE.SUCCESS,
-                    message: "", data: { balance: fund.availableBalance }});
-            }
+            res.status(200).json({ status: RESPONSE_TYPE.SUCCESS, message: "", data: { balance: fund.availableBalance } });
+        } catch(e) {
+            logger.log({ level: 'error', message: e });
+            SERVER_ERROR(res);
         }
     }
 }

@@ -1,4 +1,4 @@
-const RESPONSE_TYPE = require("../response_type");
+const { RESPONSE_TYPE } = require("../response_type");
 const { logger } = require('../../util/logger')
 
 async function fetchYahoo(id, interval, range, afterHours) {
@@ -78,6 +78,12 @@ module.exports = {
                         message: 'unable to retrieve market data'
                     }));
                 }
+            } else if(history.status == 404) {
+                // Unknown or delisted symbol
+                res.status(404).send(JSON.stringify({
+                    status: RESPONSE_TYPE.FAILED,
+                    message: 'symbol not found'
+                }));
             } else {
                 // Request did not return a 200 status
                 res.status(500).send(JSON.stringify({

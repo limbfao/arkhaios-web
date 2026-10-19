@@ -121,9 +121,10 @@ module.exports = {
   },
 
   connect: async function(callback) {
-    const url = 'mongodb+srv://' + process.env.DB_NAME + ':' +
+    // MONGO_URL overrides the Atlas cluster (e.g. a local instance for demos)
+    const url = process.env.MONGO_URL || ('mongodb+srv://' + process.env.DB_NAME + ':' +
         process.env.DB_PASS + '@cluster0.' + process.env.DB_CLUSTER +
-        '.mongodb.net/?retryWrites=true&w=majority';
+        '.mongodb.net/?retryWrites=true&w=majority');
 
     const client = new MongoClient(url);
 

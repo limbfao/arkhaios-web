@@ -1,27 +1,12 @@
-import { cookies, headers } from 'next/headers';
-import authenticate from '../../util/authenticate';
-import AccountHeader from './accountHeader';
+import AccountHeader from "./accountHeader";
 
+export const metadata = { title: "Account · Arkhaios" };
 
-export default async function RootLayout ({ children }) {
-    
-
-
-    const path = headers().get("x-url");
-    const cookieStore = cookies();
-    const email = cookieStore.get('email')?.value;
-    const session = cookieStore.get('session')?.value;
-
-    const user = await authenticate.login(email, session);
-
-
-    return (
-        <main className = "py-6 px-10">
-            <p className = " text-center text-5xl font-bold text-white place-self-center py-2 drop-shadow-lg">{user.firstName + " " + user.lastName} </p>
-            <p className ="text-center pb-5 text-sm text-amber-100">{user.username}</p>
-            <AccountHeader/>
-            {children}
-        </main>
-    )
-
+export default function AccountLayout({ children }) {
+  return (
+    <div className="page">
+      <AccountHeader />
+      {children}
+    </div>
+  );
 }

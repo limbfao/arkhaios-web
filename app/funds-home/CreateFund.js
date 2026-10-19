@@ -1,192 +1,176 @@
 "use client";
+
+// Create-a-fund form, shown on /dashboard and /funds-home to users who don't manage a fund yet
+
 import { useState } from "react";
+import { FEE_TYPES, PERIODS, feeSentence, periodInfo, postJSON } from "./fundKit";
+
+const EMPTY = { name: "", symbol: "", description: "", period: "quarterly", fee: "2/20", isPublic: true };
+
+function validate(v) {
+  const e = {};
+  if (v.name.trim().length < 2) e.name = "Use at least 2 characters.";
+  else if (v.name.trim().length > 60) e.name = "Keep the name under 60 characters.";
+  if (!/^[A-Z]{2,8}$/.test(v.symbol)) e.symbol = "Use 2 to 8 uppercase letters, e.g. ARKG.";
+  if (v.description.trim().length < 10) e.description = "Describe the strategy in at least 10 characters.";
+  else if (v.description.trim().length > 1000) e.description = "Keep the description under 1,000 characters.";
+  if (!PERIODS.some((p) => p.value === v.period)) e.period = "Choose a term length.";
+  if (!FEE_TYPES.some((f) => f.value === v.fee)) e.fee = "Choose a fee structure.";
+  return e;
+}
 
 export default function CreateFund() {
-    const [alert, setAlert] = useState(null);
-    const [isLoading, setLoading] = useState(false);
+  const [values, setValues] = useState(EMPTY);
+  const [touched, setTouched] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [created, setCreated] = useState(null);
 
-    async function createFund(event) {
-        event.preventDefault();
-        setLoading(true);
-        setAlert(["Creating fund...", "success"]);
+  const errors = validate(values);
+  const show = (key) => (submitted || touched[key]) && errors[key];
+  const set = (key) => (e) => {
+    const raw = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setValues((v) => ({ ...v, [key]: key === "symbol" ? raw.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 8) : raw }));
+  };
+  const blur = (key) => () => setTouched((t) => ({ ...t, [key]: true }));
 
-        const period = document.getElementById("disbursementPeriod");
-        const type = document.getElementById("disbursementType");
+  async function submit(event) {
+    event.preventDefault();
+    setSubmitted(true);
+    setServerError("");
+    if (Object.keys(errors).length) return;
 
-        await fetch("/api/fund/create", {
-            method: "POST",
-            mode: "cors",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                name: document.getElementById("name").value,
-                symbol: document.getElementById("symbol").value,
-                description: document.getElementById("description").value,
-                disbursementPeriod: period.options[period.selectedIndex].text.toLowerCase(),
-                disbursementType: type.options[type.selectedIndex].text,
-                public: document.getElementById("public").checked
-            }),
-        })
-        .then(async (response) => {
-            const data = await response.json();
-      
-            if (data.status == "success") {
-                setAlert(["Fund created!", "success"])
-                window.location.reload();
-            } else {
-                setAlert([data.message, "error"]);
-            }
+    setBusy(true);
+    const result = await postJSON("/api/fund/create", {
+      name: values.name.trim(),
+      symbol: values.symbol,
+      description: values.description.trim(),
+      disbursementPeriod: values.period,
+      disbursementType: values.fee,
+      public: values.isPublic,
+    });
+    setBusy(false);
 
-            setLoading(false);
-
-            setTimeout(() => setAlert(null), 5000);
-        })
+    if (result.ok) {
+      setCreated(values);
+      // The console reads the new fund from the server
+      setTimeout(() => window.location.reload(), 900);
+    } else {
+      setServerError(result.message || "The fund couldn't be created. Try again.");
     }
+  }
 
+  if (created) {
     return (
-        <>
-        <div className="flex items-center justify-center gap-2 p-8">
-            <h1 className="text-lg font-bold">Create a fund</h1>
-          </div>
-
-          <main className="h-full">
-            <form
-              id="fundForm"
-              onSubmit={createFund}
-              className="flex flex-col justify-center gap-4 px-10 py-10 lg:px-16"
-            >
-                    <div className="form-control m-2">
-                        <label className="label" htmlFor="name">
-                            <span className="label-text">Fund Name</span>
-                        </label>
-                        <input
-                        type="text"
-                        placeholder="Name"
-                        className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-                        required
-                        id="name"
-                        />
-                    </div>
-
-                    <div className="form-control m-2">
-                        <label className="label" htmlFor="symbol">
-                            <span className="label-text">Fund Symbol</span>
-                        </label>
-                        <input
-                        type="text"
-                        placeholder="Symbol"
-                        className="input input-bordered [&:user-invalid]:input-warning [&:user-valid]:input-success"
-                        required
-                        id="symbol"
-                        />
-                    </div>
-
-                    <div className="form-control m-2">
-                        <label className="label" htmlFor="description">
-                            <span className="label-text">Fund Description</span>
-                        </label>
-                        <textarea
-                        type="text"
-                        placeholder="Describe your fund investment strategy"
-                        className="textarea textarea-bordered"
-                        required
-                        id="description"
-                        />
-                    </div>
-
-                    <select required id="disbursementPeriod" className="select w-full max-w-xs m-2">
-                        <option disabled selected>Disbursement Period</option>
-                        <option>1min</option>
-                        <option>5min</option>
-                        <option>Quarterly</option>
-                        <option>Monthly</option>
-                        <option>Hourly</option>
-                        <option>Daily</option>
-                    </select>
-
-                    <select required id="disbursementType" className="select w-full max-w-xs m-2">
-                        <option disabled selected>Disbursement Type</option>
-                        <option>1/10</option>
-                        <option>2/20</option>
-                        <option>3/30</option>
-                    </select>
-
-                <div className="flex items-center justify-between gap-3 m-2">
-                    <label className="flex cursor-pointer gap-3">
-                    <input
-                        name="public"
-                        type="checkbox"
-                        className="toggle"
-                        id="public"
-                        defaultChecked="true"
-                    />
-                    Public
-                    </label>
-                </div>
-              {isLoading ? (
-                <button
-                  className="btn btn-neutral buttonLoader cursor-progress"
-                  type="submit"
-                  id="submit"
-                >
-                  <svg viewBox="25 25 50 50">
-                    <circle r="20" cy="50" cx="50"></circle>
-                  </svg>
-                </button>
-              ) : (
-                <button className="btn btn-neutral" type="submit" id="submit">
-                  Create Fund
-                </button>
-              )}
-            </form>
-        </main>
-
-        {alert?.[1] == 'error' ? (
-        <div className="toast toast-center rounded-sm pb-20">
-          <div className="alert alert-error">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="stroke-current shrink-0 h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>{alert?.[0]}</span>
-          </div>
-        </div>
-      ) : (
-        <></>
-      )}
-
-      {alert?.[1] == 'success' ? (
-        <div className="toast toast-center rounded-sm pb-20">
-          <div className="alert alert-success">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="stroke-current shrink-0 h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>{alert?.[0]}</span>
-          </div>
-        </div>
-      ) : (
-        <></>
-      )}
-        </>
+      <div className="panel p-8 text-center" role="status">
+        <h2 className="font-display text-2xl text-marble">{created.name} is live</h2>
+        <p className="mt-2 text-sm text-muted">Opening your fund console…</p>
+        <span className="loading loading-spinner loading-sm mt-4 text-bronze" />
+      </div>
     );
+  }
+
+  const fee = FEE_TYPES.find((f) => f.value === values.fee);
+
+  return (
+    <form onSubmit={submit} noValidate className="panel">
+      <div className="border-b border-line px-6 py-5">
+        <h2 className="text-lg font-semibold text-marble">Fund details</h2>
+        <p className="mt-1 text-sm text-muted">
+          You become the fund&apos;s portfolio manager. It opens for deposits for 14 days, then trading begins.
+        </p>
+      </div>
+
+      <div className="grid gap-5 px-6 py-6 md:grid-cols-[1fr_180px]">
+        <Field id="fund-name" label="Fund name" error={show("name")}>
+          <input id="fund-name" className={fieldClass(show("name"))} value={values.name} onChange={set("name")}
+            onBlur={blur("name")} placeholder="e.g. Arkhaios Growth" maxLength={60}
+            aria-invalid={Boolean(show("name"))} aria-describedby="fund-name-msg" />
+        </Field>
+        <Field id="fund-symbol" label="Symbol" error={show("symbol")} hint="2 to 8 letters">
+          <input id="fund-symbol" className={`${fieldClass(show("symbol"))} font-semibold tracking-wide`}
+            value={values.symbol} onChange={set("symbol")} onBlur={blur("symbol")} placeholder="ARKG"
+            autoCapitalize="characters" aria-invalid={Boolean(show("symbol"))} aria-describedby="fund-symbol-msg" />
+        </Field>
+
+        <div className="md:col-span-2">
+          <Field id="fund-description" label="Strategy" error={show("description")}
+            hint={`${values.description.trim().length}/1,000`}>
+            <textarea id="fund-description" className={`${fieldClass(show("description"))} min-h-[110px] resize-y`}
+              value={values.description} onChange={set("description")} onBlur={blur("description")}
+              placeholder="What the fund invests in, how concentrated it is, and how often you rebalance."
+              maxLength={1000} aria-invalid={Boolean(show("description"))} aria-describedby="fund-description-msg" />
+          </Field>
+        </div>
+
+        <Field id="fund-period" label="Term length" error={show("period")} hint={periodInfo(values.period).hint}>
+          <select id="fund-period" className="select select-bordered w-full border-line bg-basalt text-sm focus:border-bronze focus:outline-none"
+            value={values.period} onChange={set("period")} aria-describedby="fund-period-msg">
+            {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        </Field>
+        <div className="hidden md:block" />
+
+        <fieldset className="md:col-span-2">
+          <legend className="field-label">Fee structure</legend>
+          <div className="grid gap-3 sm:grid-cols-3" role="radiogroup">
+            {FEE_TYPES.map((f) => {
+              const active = values.fee === f.value;
+              return (
+                <label key={f.value}
+                  className={`cursor-pointer rounded-box border p-4 transition-colors ${
+                    active ? "border-bronze bg-bronze/10" : "border-line bg-basalt hover:border-muted/60"
+                  }`}>
+                  <input type="radio" name="fee" value={f.value} checked={active} onChange={set("fee")} className="sr-only" />
+                  <div className={`text-lg font-semibold ${active ? "text-bronze" : "text-marble"}`}>{f.value}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-muted">
+                    {f.base}% base fee, {f.performance}% of profits above a {f.hurdle}% return
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-muted">{fee ? feeSentence(fee.value) : null} Fees are charged at the end of each term.</p>
+        </fieldset>
+
+        <div className="md:col-span-2 flex items-start justify-between gap-6 rounded-box border border-line bg-basalt p-4">
+          <div>
+            <label htmlFor="fund-public" className="text-sm font-medium text-marble">Public fund</label>
+            <p className="mt-0.5 text-xs text-muted">
+              {values.isPublic
+                ? "Anyone can find the fund and request to join."
+                : "People need the 6-digit access code to request to join. You'll find it in fund settings."}
+            </p>
+          </div>
+          <input id="fund-public" type="checkbox" className="toggle toggle-primary" checked={values.isPublic}
+            onChange={set("isPublic")} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-6 py-4">
+        <p className="text-sm text-loss" role="alert">{serverError}</p>
+        <button type="submit" className="btn btn-primary" disabled={busy}>
+          {busy ? <span className="loading loading-spinner loading-xs" /> : null}
+          Create fund
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function fieldClass(error) {
+  return `field ${error ? "border-loss focus:border-loss" : ""}`;
+}
+
+function Field({ id, label, error, hint, children }) {
+  return (
+    <div>
+      <label htmlFor={id} className="field-label">{label}</label>
+      {children}
+      <p id={`${id}-msg`} className={`mt-1.5 min-h-[1rem] text-xs ${error ? "text-loss" : "text-muted"}`}>
+        {error || hint || ""}
+      </p>
+    </div>
+  );
 }

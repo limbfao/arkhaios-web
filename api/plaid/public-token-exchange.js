@@ -39,6 +39,7 @@ module.exports = {
     for(let i = 0; i < accounts.length; i++){
       accountObject[i] = 
       {
+        key: "bank-" + require("crypto").randomUUID(),
         institution_name: institution.name,
         institution_id : institution.institution_id,
         name: accounts[i].name,

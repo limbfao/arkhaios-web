@@ -81,7 +81,8 @@ async function startConsumerForUserTopics(userId, topics) {
 const kafkaProducer = kafka.producer();
 const kafkaConsumer = kafka.consumer({ groupId: "messaging-group" });
 
-(async () => {
+// Kafka (AWS MSK) is unreachable outside production; dev delivers chat over local sockets
+if(process.env.NODE_ENV == 'production') (async () => {
     try {
         await kafkaProducer.connect();
         await kafkaConsumer.connect();

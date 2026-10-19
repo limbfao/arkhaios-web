@@ -1,104 +1,37 @@
 import { useKYCFlowContext } from "../KYCFlowContext";
 
+const QUESTIONS = [
+  ["is_control_person", "Are you a director, officer or 10% shareholder of a publicly traded company?"],
+  ["is_affiliated", "Are you affiliated with or employed by FINRA, a stock exchange or a broker-dealer?"],
+  ["is_pep", "Are you a senior political figure, or have you been one?"],
+  ["is_family_exposed", "Is anyone in your immediate family a senior political figure or a control person of a public company?"],
+];
+
 export default function Disclosures() {
-  const { userData, setUserData } = useKYCFlowContext();
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setUserData((prevState) => {
-      const newData = prevState;
-      newData[name] = value == "true" ? true : false;
-
-      console.log(newData);
-      return newData;
-    });
-  };
-
-  // A helper function to convert the boolean to a string for the select value
-  const getSelectValue = (key) => {
-    const value = userData[key];
-    return value ? true : false;
-  };
+  const { userData, set } = useKYCFlowContext();
 
   return (
-    <div className="flex justify-center w-full flex-col space-y-4">
-      <label className="form-control">
-        <div className="label">
-          <span className="label-text">
-            Do you own a controlling position in a publicly traded company?
-          </span>
+    <fieldset className="divide-y divide-line rounded-btn border border-line">
+      <legend className="sr-only">Regulatory disclosures</legend>
+      {QUESTIONS.map(([key, question]) => (
+        <div key={key} className="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5">
+          <p className="min-w-0 flex-1 text-sm text-marble">{question}</p>
+          <div className="join" role="radiogroup" aria-label={question}>
+            {[[false, "No"], [true, "Yes"]].map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                role="radio"
+                aria-checked={userData[key] === value}
+                onClick={() => set(key, value)}
+                className={`btn join-item btn-sm w-16 ${userData[key] === value ? "btn-active border-bronze/60 text-marble" : "btn-ghost border-line text-muted"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <select
-          name="is_control_person"
-          onChange={handleChange}
-          className="select select-bordered"
-        >
-          <option disabled selected>
-            Pick one
-          </option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </label>
-
-      <label className="form-control">
-        <div className="label">
-          <span className="label-text">
-            Are you affiliated with FINRA or a market exchange?
-          </span>
-        </div>
-        <select
-          name="is_affiliated"
-          onChange={handleChange}
-          className="select select-bordered"
-        >
-          <option disabled selected>
-            Pick one
-          </option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </label>
-
-      <label className="form-control">
-        <div className="label">
-          <span className="label-text">
-            Are you politically exposed in any way?
-          </span>
-        </div>
-        <select
-          name="is_pep"
-          onChange={handleChange}
-          className="select select-bordered"
-        >
-          <option disabled selected>
-            Pick one
-          </option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </label>
-
-      <label className="form-control w-full">
-        <div className="label">
-          <span className="label-text">
-            Is anyone from your immediate family exposed politically or holds a
-            controlling position in a publicly traded company?
-          </span>
-        </div>
-        <select
-          name="is_family_exposed"
-          onChange={handleChange}
-          className="select select-bordered"
-        >
-          <option disabled selected>
-            Pick one
-          </option>
-          <option value="true">Yes</option>
-          <option value="false">No</option>
-        </select>
-      </label>
-    </div>
+      ))}
+    </fieldset>
   );
 }

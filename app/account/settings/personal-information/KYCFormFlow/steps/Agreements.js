@@ -1,68 +1,33 @@
-import { useState } from "react";
+import { DocumentTextIcon } from "@heroicons/react/24/outline";
 import { useKYCFlowContext } from "../KYCFlowContext";
 
 export default function Agreements() {
-  const { userData, setUserData } = useKYCFlowContext();
-
-  const [accountLinkClicked, setAccountLinkClicked] = useState(false);
-  const [marginLinkClicked, setMarginLinkClicked] = useState(false);
-
-  function handleAccountClick() {
-
-    setAccountLinkClicked(true);
-  }
-
-  function handleMarginClick() {
-    setMarginLinkClicked(true);
-  }
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    setUserData((prevState) => {
-      const newData = { ...prevState, [name]: value };
-      return newData;
-    });
-  };
+  const { userData, set } = useKYCFlowContext();
 
   return (
-    <div className="flex flex-col ">
-      <div className="w-full mx-2 space-y-5">
-        <div className="flex space-x-2 self-center">
-          <a
-            name="account_agreement"
-            href="https://files.alpaca.markets/disclosures/library/AcctAppMarginAndCustAgmt.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleAccountClick}
-            className="hover:underline self-center text-sm"
-          >
-            Alpaca Account Agreement
-          </a>
-          <div className="form-control self-center">
-            <label className="label cursor-pointer gap-x-2">
-              <input
-                type="checkbox"
-                name="account_agreement"
-                onClick={handleChange}
-                className="checkbox checkbox-info"
-                disabled={!accountLinkClicked}
-              />
-            </label>
-          </div>
-          <a className="self-center text-xs">
-            I, the undersigned, acknowledge and accept the terms and conditions
-            outlined in this document.
-          </a>
-        </div>
-        <div className="flex space-x-2 self-center">
-          <p className = "text-xs">Please note that when you click "Confirm," you agree that the information you have entered in this form is legally correct and verifiable. Your submission of this form does not guarantee any services or obligations from us until confirmed by further communication.</p>
-        </div>
-      </div>
+    <div className="space-y-4">
+      <a
+        href="https://files.alpaca.markets/disclosures/library/AcctAppMarginAndCustAgmt.pdf"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 rounded-btn border border-line px-4 py-3 text-sm text-marble hover:border-bronze/50 hover:bg-slate/40"
+      >
+        <DocumentTextIcon className="h-5 w-5 text-bronze" />
+        Alpaca customer account agreement (PDF)
+      </a>
+      <label className="flex cursor-pointer items-start gap-3 text-sm text-marble">
+        <input
+          type="checkbox"
+          className="checkbox checkbox-primary checkbox-sm mt-0.5"
+          checked={userData.account_agreement === "on"}
+          onChange={(e) => set("account_agreement", e.target.checked ? "on" : "")}
+        />
+        I have read and accept the customer account agreement.
+      </label>
+      <p className="text-xs text-muted">
+        By selecting Submit, you confirm the information you entered is accurate. Your application is reviewed by Alpaca
+        Securities; we'll let you know if anything else is needed.
+      </p>
     </div>
   );
 }
-
-
-
-
